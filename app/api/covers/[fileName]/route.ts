@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
+import { getCoversDir } from '@/lib/paths';
 
 export async function GET(
   _req: NextRequest,
@@ -8,7 +9,7 @@ export async function GET(
 ) {
   const { fileName } = await params;
   const sanitized = path.basename(fileName);
-  const filePath = path.join(process.cwd(), 'config', 'cache', 'covers', sanitized);
+  const filePath = path.join(getCoversDir(), sanitized);
 
   if (!fs.existsSync(filePath)) {
     return new NextResponse('Cover not found', { status: 404 });

@@ -40,10 +40,18 @@ ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
+ENV CONFIG_DIR=/config
+ENV MEDIA_DIR=/media
+
+# su-exec: drop root → nextjs after entrypoint prepares /config + DB schema
+RUN apk add --no-cache su-exec
+
+# Prisma CLI for `db push` on container start (schema init / sync)
+RUN npm install -g prisma@6.19.3
 
 # Create non-root user
-RUN addgroup --system --gid 1001 nodejs
-RUN adduser --system --uid 1001 nextjs
+RUN addgroup --system --gid 1001 nodejs \
+  && adduser --system --uid 1001 nextjs
 
 # Copy static assets and standalone server bundle
 COPY --from=builder /app/public ./public
@@ -55,12 +63,15 @@ COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
 
-# Create mount points and permissions
-RUN mkdir -p /media /config/cache/covers
-RUN chown -R nextjs:nodejs /config /media
+# Create mount points (ownership re-applied at runtime for host-mounted /config)
+RUN mkdir -p /media /config/cache/covers \
+  && chown -R nextjs:nodejs /config /media /app
 
-USER nextjs
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
+# Entrypoint runs as root briefly to chown /config + db push, then drops to nextjs
 EXPOSE 3000
 
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["node", "server.js"]

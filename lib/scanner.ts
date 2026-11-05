@@ -3,6 +3,7 @@ import path from 'path';
 import { parseFile } from 'music-metadata';
 import { prisma } from './prisma';
 import { resolveBookMetadata, cacheCoverImage, rateLimiter, RateLimitError } from './metadata';
+import { getMediaDir } from './paths';
 
 const SUPPORTED_EXTENSIONS = new Set(['.mp3', '.m4a', '.aac', '.flac', '.ogg', '.opus', '.wav', '.mka']);
 
@@ -135,13 +136,16 @@ export async function fastIndexMediaDirectory(mediaDirectory?: string): Promise<
   updated: number;
   missing: number;
 }> {
-  const targetDir =
-    mediaDirectory ||
-    (fs.existsSync(path.join(process.cwd(), 'example-files'))
-      ? path.join(process.cwd(), 'example-files')
-      : path.join(process.cwd(), 'media'));
+  const targetDir = getMediaDir(mediaDirectory);
 
   if (!fs.existsSync(targetDir)) {
+    // Never mkdir a Docker MEDIA_DIR mount (often read-only). Only create
+    // the local-dev fallback directory when MEDIA_DIR is unset.
+    if (process.env.MEDIA_DIR) {
+      throw new Error(
+        `MEDIA_DIR does not exist or is not mounted: ${targetDir}`
+      );
+    }
     fs.mkdirSync(targetDir, { recursive: true });
   }
 

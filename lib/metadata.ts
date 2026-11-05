@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { prisma } from './prisma';
+import { getCoversDir } from './paths';
 
 export interface CleanedTitleResult {
   title: string;
@@ -371,7 +372,7 @@ async function fetchCrossRefMetadata(query: string, authorHint?: string): Promis
  */
 export async function cacheCoverImage(bookId: string, remoteUrl: string): Promise<string | null> {
   try {
-    const coversDir = path.join(process.cwd(), 'config', 'cache', 'covers');
+    const coversDir = getCoversDir();
     if (!fs.existsSync(coversDir)) {
       fs.mkdirSync(coversDir, { recursive: true });
     }

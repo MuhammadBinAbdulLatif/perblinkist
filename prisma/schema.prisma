@@ -1,7 +1,9 @@
 // Prisma schema for PerBlinkist
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // native = local Windows/macOS/Linux builds; linux-musl = Alpine Docker runner
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {

@@ -12,10 +12,13 @@ services:
       - NODE_ENV=production
       - PORT=3000
       - DATABASE_URL=file:/config/perblinkist.db
+      - CONFIG_DIR=/config
       - MEDIA_DIR=/media
+      # Set to "false" to disable the automatic scan that runs on every server boot
+      - AUTO_SCAN_ON_STARTUP=true
       - JWT_SECRET=change-this-to-a-very-secure-random-secret
     volumes:
       # Persistent configuration & SQLite database
       - ./config:/config
       # Mount your host audio summaries directory here (Read-Only)
-      - ./media:/media:ro
+      - "/mnt/storage/Audiobooks/Blinkist SiteRip Audio Collection (August 2023)/summaries:/media:ro"
