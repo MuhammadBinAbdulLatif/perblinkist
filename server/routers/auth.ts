@@ -26,7 +26,7 @@ async function setNativeAuthCookie(token: string) {
       maxAge: TOKEN_MAX_AGE,
       httpOnly: true,
       sameSite: 'lax',
-      secure: isProd,
+      secure: false,
     });
   } catch {
     // Graceful fallback for non-request environments (e.g. standalone test scripts)
