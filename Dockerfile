@@ -9,7 +9,9 @@ RUN corepack enable && corepack prepare pnpm@10.15.0 --activate
 FROM base AS deps
 WORKDIR /app
 
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml* ./
+# .npmrc sets node-linker=hoisted so generated Prisma client lands at
+# node_modules/.prisma (pnpm's default nested .pnpm layout breaks the runner COPY).
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml* .npmrc ./
 COPY prisma ./prisma/
 
 RUN pnpm install --frozen-lockfile
@@ -19,13 +21,16 @@ FROM base AS builder
 WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/package.json /app/pnpm-lock.yaml /app/.npmrc ./
 COPY . .
 
 # Generate Prisma Client.
 # DATABASE_URL must be syntactically valid at generate time (actual value used only at runtime).
 ENV DATABASE_URL="file:/tmp/build-placeholder.db"
 
-RUN pnpm exec prisma generate
+RUN pnpm exec prisma generate \
+  && test -d node_modules/.prisma \
+  && test -d node_modules/@prisma/client
 
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
@@ -59,7 +64,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
 
-# Copy the generated Prisma client
+# Prisma is in serverExternalPackages — standalone does not always embed the
+# generated client/engines. Copy the hoisted install artifacts explicitly.
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
 
