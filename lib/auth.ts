@@ -77,16 +77,14 @@ export function verifyAuthToken(token: string): AuthUserPayload | null {
  * Create auth cookie string
  */
 export function createAuthCookie(token: string): string {
-  const isProd = process.env.NODE_ENV === 'production';
-  return `${AUTH_COOKIE_NAME}=${token}; Path=/; Max-Age=${TOKEN_MAX_AGE}; HttpOnly; SameSite=Lax${isProd ? '; Secure' : ''}`;
+  return `${AUTH_COOKIE_NAME}=${token}; Path=/; Max-Age=${TOKEN_MAX_AGE}; HttpOnly; SameSite=Lax`;
 }
 
 /**
  * Clear auth cookie string
  */
 export function createClearAuthCookie(): string {
-  const isProd = process.env.NODE_ENV === 'production';
-  return `${AUTH_COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax${isProd ? '; Secure' : ''}`;
+  return `${AUTH_COOKIE_NAME}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`;
 }
 
 /**
