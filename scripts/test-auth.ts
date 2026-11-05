@@ -55,9 +55,9 @@ async function testAuthSystem() {
   });
 
   console.log(`Created Admin User: ${setupRes.user.username} (ID: ${setupRes.user.id})`);
-  console.log(`Cookie generated: ${Boolean(setupRes.cookie)}`);
+  console.log(`Token generated: ${Boolean(setupRes.token)}`);
 
-  if (!setupRes.success || !setupRes.cookie) {
+  if (!setupRes.success || !setupRes.token) {
     throw new Error('Test 3 Failed: Admin setup failed');
   }
   console.log('✅ Test 3 Passed!\n');
@@ -92,7 +92,7 @@ async function testAuthSystem() {
   });
 
   console.log(`Login Successful for: ${loginRes.user.username}`);
-  console.log(`Session Cookie Issued: ${loginRes.cookie.substring(0, 40)}...`);
+  console.log(`Session Token Issued: ${Boolean(loginRes.token)}`);
   if (!loginRes.success) {
     throw new Error('Test 5 Failed: Valid login rejected');
   }

@@ -22,7 +22,7 @@ async function testAuthRecovery() {
   });
 
   console.log(`User Registered: ${regRes.user.username} (Admin: ${regRes.user.isAdmin})`);
-  console.log(`Session Cookie Issued: ${Boolean(regRes.cookie)}`);
+  console.log(`Session Token Issued: ${Boolean(regRes.token)}`);
 
   if (!regRes.success) {
     throw new Error('Step 1 Failed: Registration failed');
@@ -62,7 +62,7 @@ async function testAuthRecovery() {
   });
 
   console.log(`Password Reset Status: ${resetRes.success}`);
-  console.log(`New Session Issued: ${Boolean(resetRes.cookie)}`);
+  console.log(`New Session Token Issued: ${Boolean(resetRes.token)}`);
 
   if (!resetRes.success) {
     throw new Error('Step 4 Failed: Valid reset failed');

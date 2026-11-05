@@ -8,24 +8,28 @@ This document defines the selected technology stack, architectural decisions, an
 
 | Layer | Technology | Rationale |
 |---|---|---|
-| **Full-Stack Framework** | **Next.js (App Router, TypeScript, React 19, Turbopack)** | Unified modern full-stack web application. Server Components, Route Handlers (streaming audio, cover delivery), and tRPC adapters. |
+| **Full-Stack Framework** | **Next.js (App Router, TypeScript, React 19, Turbopack)** | Unified modern full-stack web application. Server Components, Route Handlers (streaming audio, cover delivery), and tRPC router integration. |
 | **API & Client-Server Layer** | **tRPC (v11) + TanStack React Query (v5)** | Full end-to-end type safety, auto-generated TypeScript hooks (`trpc.getRandomBooks.useQuery`), automatic caching, background refetching, and zero manual endpoint glue. |
 | **Package Manager** | **`pnpm`** | Ultra-fast, disk-efficient symlink-based package management. |
 | **Database & ORM** | **Prisma ORM + SQLite (WAL mode)** | Fully type-safe models, automated migrations, zero-config embedded storage suited for containerized self-hosting. |
-| **Styling & UI** | **Tailwind CSS v4 + Lucide Icons** | Modern, sophisticated Blinkist-like UI with smooth animations, dark-mode first, and responsive persistent audio dock. |
+| **Component System & Styling** | **Official shadcn/ui + Tailwind CSS v4 + Lucide Icons** | Minimalist Zinc monochromatic theme, zero AI gimmicks, formal editorial design. |
+| **Authentication & Sessions** | **Next.js `cookies()` + JWT (HS256) + Bcrypt** | HTTP-only, SameSite=Lax secure session cookies set directly via Next.js native `cookies()` in server routines; security question password recovery. |
 | **Metadata Providers** | **Google Books API + Open Library API** | High coverage open APIs for book covers, author names, publishers, descriptions, and categories. |
-| **Audio Processing** | **`music-metadata`** | Fast in-process audio header parsing for exact duration detection (`.mp3`, `.m4a`, etc.). |
-| **Containerization** | **Docker & Docker Compose (Standalone Next.js output)** | Single self-contained container with `/media` and `/config` volume mounts. |
+| **Audio Processing & Streaming** | **RFC 7233 Byte-Range HTTP 206 Streaming + Node Streams** | Fast header parsing and instant scrubbing for `.mp3`, `.m4a`, `.aac`, `.flac`, `.ogg`, and `.mka` (Matroska/Opus). |
+| **Containerization** | **Docker & Docker Compose (Standalone Next.js output)** | Single self-contained container with `/media:ro` and `/config` volume mounts. |
 
 ---
 
 ## 2. Core Architectural Decisions
 
-### Decision: **Next.js + tRPC Inside Next.js + Prisma + SQLite**
+### Decision: **Next.js + tRPC Inside Next.js + Native Cookies + Prisma + SQLite**
 - **tRPC Inside Next.js (`/api/trpc/[trpc]`)**:
   - Provides type-safe RPC procedures defined in `server/routers/app.ts`.
-  - Type-safe mutations (`triggerScan`, `updateProgress`) and queries (`getBooks`, `getRandomBooks`, `searchBooks`, `getScanStatus`).
+  - Type-safe mutations (`setupAdmin`, `register`, `login`, `resetPasswordWithSecurityAnswer`, `triggerScan`, `updateProgress`).
   - No hand-written REST controllers or route duplication.
+- **Native Cookie Management via `next/headers`**:
+  - Auth mutations invoke Next.js native `cookies().set(...)` and `cookies().delete(...)` on the incoming request context.
+  - Automatically emits standard, RFC-compliant `Set-Cookie` response headers directly to the client browser, eliminating reliance on manual response serialization.
 - **Dedicated Media Delivery Route Handlers**:
   - `/api/stream/[id]`: Native Node.js `fs.createReadStream` supporting HTTP 206 Partial Content for byte-range seeking and scrubbing.
   - `/api/covers/[fileName]`: Cached local book covers with immutable caching headers.
@@ -40,7 +44,7 @@ This document defines the selected technology stack, architectural decisions, an
 
 ```
 /
-├── /media                # Read-only mount of user's summary audio files (.mp3, .m4a, .aac, .ogg)
+├── /media                # Read-only mount of user's summary audio files (.mka, .mp3, .m4a, .aac, .ogg)
 ├── /config               # Write mount for persistent data:
 │   ├── perblinkist.db    # SQLite database (managed via Prisma)
 │   └── /cache            # Local cache for fetched book cover images
@@ -64,7 +68,7 @@ This document defines the selected technology stack, architectural decisions, an
 ## 5. Audio Streaming & Player Spec
 
 - **HTTP Range Requests (`206 Partial Content`)**: Enables instant audio scrubbing and accurate seeking in the browser without downloading the full audio file upfront.
-- **Audio Formats Supported**: `.mp3`, `.m4a`, `.aac`, `.flac`, `.ogg`, `.opus`, `.wav`.
+- **Audio Formats Supported**: `.mka`, `.mp3`, `.m4a`, `.aac`, `.flac`, `.ogg`, `.opus`, `.wav`.
 - **Playback State**:
   - Persisted in Prisma SQLite database per book (`playbackPosition`, `durationSeconds`, `isCompleted`, `lastPlayedAt`).
   - Seamless resume across sessions.

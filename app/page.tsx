@@ -47,8 +47,7 @@ export default function Home() {
   // Authentication status query
   const authStatusQuery = trpc.auth.status.useQuery();
   const logoutMutation = trpc.auth.logout.useMutation({
-    onSuccess: (data) => {
-      document.cookie = data.cookie;
+    onSuccess: () => {
       authStatusQuery.refetch();
     },
   });

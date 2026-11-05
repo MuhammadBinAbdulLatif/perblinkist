@@ -53,8 +53,7 @@ export function AuthScreen({ isInitialized, onSuccess }: AuthScreenProps) {
 
   // Mutations
   const loginMutation = trpc.auth.login.useMutation({
-    onSuccess: (data) => {
-      document.cookie = data.cookie;
+    onSuccess: () => {
       onSuccess();
     },
     onError: (err) => {
@@ -63,8 +62,7 @@ export function AuthScreen({ isInitialized, onSuccess }: AuthScreenProps) {
   });
 
   const setupAdminMutation = trpc.auth.setupAdmin.useMutation({
-    onSuccess: (data) => {
-      document.cookie = data.cookie;
+    onSuccess: () => {
       onSuccess();
     },
     onError: (err) => {
@@ -73,8 +71,7 @@ export function AuthScreen({ isInitialized, onSuccess }: AuthScreenProps) {
   });
 
   const registerMutation = trpc.auth.register.useMutation({
-    onSuccess: (data) => {
-      document.cookie = data.cookie;
+    onSuccess: () => {
       onSuccess();
     },
     onError: (err) => {
@@ -94,8 +91,7 @@ export function AuthScreen({ isInitialized, onSuccess }: AuthScreenProps) {
   });
 
   const resetPasswordMutation = trpc.auth.resetPasswordWithSecurityAnswer.useMutation({
-    onSuccess: (data) => {
-      document.cookie = data.cookie;
+    onSuccess: () => {
       setSuccessMessage('Password reset successfully! Redirecting...');
       setTimeout(() => {
         onSuccess();

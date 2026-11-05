@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
+import { cookies } from 'next/headers';
 import { router, publicProcedure, protectedProcedure } from '../trpc';
 import { prisma } from '@/lib/prisma';
 import {
@@ -8,10 +9,41 @@ import {
   hashSecurityAnswer,
   verifySecurityAnswer,
   signAuthToken,
-  createAuthCookie,
-  createClearAuthCookie,
+  AUTH_COOKIE_NAME,
+  TOKEN_MAX_AGE,
   SECURITY_QUESTIONS,
 } from '@/lib/auth';
+
+/**
+ * Sets auth session cookie directly via Next.js native cookies() API
+ */
+async function setNativeAuthCookie(token: string) {
+  try {
+    const cookieStore = await cookies();
+    const isProd = process.env.NODE_ENV === 'production';
+    cookieStore.set(AUTH_COOKIE_NAME, token, {
+      path: '/',
+      maxAge: TOKEN_MAX_AGE,
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: isProd,
+    });
+  } catch {
+    // Graceful fallback for non-request environments (e.g. standalone test scripts)
+  }
+}
+
+/**
+ * Clears auth session cookie directly via Next.js native cookies() API
+ */
+async function clearNativeAuthCookie() {
+  try {
+    const cookieStore = await cookies();
+    cookieStore.delete(AUTH_COOKIE_NAME);
+  } catch {
+    // Graceful fallback for non-request environments
+  }
+}
 
 export const authRouter = router({
   // Check if system is initialized (has at least 1 user) and return current session
@@ -64,10 +96,12 @@ export const authRouter = router({
         isAdmin: true,
       });
 
+      await setNativeAuthCookie(token);
+
       return {
         success: true,
         user: { id: user.id, username: user.username, isAdmin: true },
-        cookie: createAuthCookie(token),
+        token,
       };
     }),
 
@@ -119,10 +153,12 @@ export const authRouter = router({
         isAdmin: false,
       });
 
+      await setNativeAuthCookie(token);
+
       return {
         success: true,
         user: { id: user.id, username: user.username, isAdmin: false },
-        cookie: createAuthCookie(token),
+        token,
       };
     }),
 
@@ -162,10 +198,12 @@ export const authRouter = router({
         isAdmin: user.isAdmin,
       });
 
+      await setNativeAuthCookie(token);
+
       return {
         success: true,
         user: { id: user.id, username: user.username, isAdmin: user.isAdmin },
-        cookie: createAuthCookie(token),
+        token,
       };
     }),
 
@@ -239,18 +277,20 @@ export const authRouter = router({
         isAdmin: user.isAdmin,
       });
 
+      await setNativeAuthCookie(token);
+
       return {
         success: true,
         message: 'Password reset successfully.',
-        cookie: createAuthCookie(token),
+        token,
       };
     }),
 
   // Logout
   logout: publicProcedure.mutation(async () => {
+    await clearNativeAuthCookie();
     return {
       success: true,
-      cookie: createClearAuthCookie(),
     };
   }),
 

@@ -2,8 +2,8 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'perblinkist-super-secret-jwt-key-2026';
-const AUTH_COOKIE_NAME = 'perblinkist_token';
-const TOKEN_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
+export const AUTH_COOKIE_NAME = 'perblinkist_token';
+export const TOKEN_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
 
 export interface AuthUserPayload {
   userId: string;
