@@ -60,7 +60,12 @@ export default function Home() {
   );
 
   const scanStatusQuery = trpc.getScanStatus.useQuery(undefined, {
-    refetchInterval: (data) => (data.state.data?.status === 'scanning' ? 1000 : false),
+    refetchInterval: (data) =>
+      data.state.data?.status === 'indexing' ||
+      data.state.data?.status === 'enriching' ||
+      data.state.data?.isRateLimited
+        ? 1500
+        : 6000,
   });
 
   const triggerScanMutation = trpc.triggerScan.useMutation({
@@ -70,9 +75,20 @@ export default function Home() {
     },
   });
 
+  const processBatchMutation = trpc.processNextBatch.useMutation({
+    onSuccess: () => {
+      scanStatusQuery.refetch();
+      randomBooksQuery.refetch();
+    },
+  });
+
   const updateProgressMutation = trpc.updateProgress.useMutation();
 
-  const isScanning = scanStatusQuery.data?.status === 'scanning';
+  const isScanning =
+    scanStatusQuery.data?.status === 'indexing' || scanStatusQuery.data?.status === 'enriching';
+  const isRateLimited = scanStatusQuery.data?.isRateLimited ?? false;
+  const rateLimitRemainingSeconds = scanStatusQuery.data?.rateLimitRemainingSeconds ?? 0;
+  const scanStats = scanStatusQuery.data;
   const currentUser = authStatusQuery.data?.currentUser;
   const isInitialized = authStatusQuery.data?.initialized ?? true;
 
@@ -209,6 +225,12 @@ export default function Home() {
           </div>
 
           <div className="flex items-center gap-3 text-sm">
+            {isRateLimited && (
+              <Badge variant="outline" className="border-amber-700/50 bg-amber-950/40 text-amber-400 text-xs px-2.5 py-1">
+                Cooldown: {rateLimitRemainingSeconds}s (Rate limited)
+              </Badge>
+            )}
+
             <Button
               variant="outline"
               size="sm"
@@ -217,7 +239,13 @@ export default function Home() {
               className="border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 cursor-pointer"
             >
               <FolderSync className={`w-3.5 h-3.5 mr-1.5 ${isScanning ? 'animate-spin' : ''}`} />
-              <span>{isScanning ? 'Syncing...' : 'Sync Library'}</span>
+              <span>
+                {scanStats?.status === 'indexing'
+                  ? 'Indexing Files...'
+                  : scanStats?.status === 'enriching'
+                  ? `Batching (${scanStats.totalEnriched}/${scanStats.totalIndexed})`
+                  : 'Sync Library'}
+              </span>
             </Button>
 
             {currentUser && (

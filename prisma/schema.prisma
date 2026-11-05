@@ -52,9 +52,14 @@ model BookSummary {
   publishedYear   Int?
   isbn            String?
 
-  // Ingestion status
+  // Ingestion & Enrichment status
   matchedSource   String?   // "google_books", "open_library", or "fallback"
   isEnriched      Boolean   @default(false)
+  indexingStatus  String    @default("indexed") // "indexed"
+  enrichmentStatus String   @default("pending") // "pending" | "enriched" | "rate_limited" | "failed" | "skipped"
+  enrichmentError String?   // Diagnostics message (e.g., "HTTP 429: Rate limit reached")
+  enrichedAt      DateTime? // Timestamp when metadata was enriched
+  retryCount      Int       @default(0)         // Number of enrichment retry attempts
 
   // Playback state
   playbackPosition Float    @default(0) // Last playback timestamp in seconds
@@ -68,6 +73,7 @@ model BookSummary {
   @@index([author])
   @@index([category])
   @@index([isMissing])
+  @@index([enrichmentStatus])
 }
 
 model Setting {

@@ -1,26 +1,88 @@
 import { z } from 'zod';
 import { router, publicProcedure, protectedProcedure } from '@/server/trpc';
 import { prisma } from '@/lib/prisma';
-import { runMediaScan, getScanStatus } from '@/lib/scanner';
+import {
+  getDetailedScanStats,
+  fastIndexMediaDirectory,
+  processBatchEnrichment,
+  runFullOrchestratedIngestion,
+} from '@/lib/scanner';
 import { authRouter } from './auth';
 
 export const appRouter = router({
   // Sub-routers
   auth: authRouter,
 
-  // Scan procedures (protected: only logged-in users/admins can trigger scans)
+  // Enhanced Scan & Resilient Batching procedures
   getScanStatus: publicProcedure.query(async () => {
-    return getScanStatus();
+    return getDetailedScanStats();
   }),
 
+  // Stage 1: Fast local disk indexing (zero API calls)
+  triggerFastIndex: protectedProcedure.mutation(async () => {
+    return fastIndexMediaDirectory();
+  }),
+
+  // Stage 2: Process a single batch of 10 items
+  processNextBatch: protectedProcedure
+    .input(z.object({ batchSize: z.number().min(1).max(50).default(10) }).optional())
+    .mutation(async ({ input }) => {
+      return processBatchEnrichment(input?.batchSize || 10);
+    }),
+
+  // Continuous Orchestrated Ingestion (Fast index + auto-batching in 10s with backoff)
   triggerScan: protectedProcedure.mutation(async () => {
-    const current = getScanStatus();
-    if (current.status === 'scanning') {
-      return { success: false, message: 'Scan already in progress', status: current };
-    }
-    // Fire background scan
-    runMediaScan().catch((err) => console.error('Scan error:', err));
-    return { success: true, message: 'Scan triggered', status: getScanStatus() };
+    // Run orchestrated pipeline in background
+    runFullOrchestratedIngestion().catch((err) => console.error('[Scan] Error running orchestrated pipeline:', err));
+    return { success: true, message: 'Batch ingestion pipeline initiated', status: await getDetailedScanStats() };
+  }),
+
+  // Detailed Ingestion Diagnostics for Thousands of Files
+  getIngestionDiagnostics: protectedProcedure.query(async () => {
+    const [totalFiles, enriched, pending, rateLimited, failed] = await Promise.all([
+      prisma.bookSummary.count({ where: { isMissing: false } }),
+      prisma.bookSummary.findMany({
+        where: { isMissing: false, enrichmentStatus: 'enriched' },
+        select: { id: true, title: true, author: true, enrichedAt: true, matchedSource: true },
+        take: 10,
+        orderBy: { enrichedAt: 'desc' },
+      }),
+      prisma.bookSummary.findMany({
+        where: { isMissing: false, enrichmentStatus: 'pending' },
+        select: { id: true, fileName: true, title: true, createdAt: true },
+        take: 10,
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.bookSummary.findMany({
+        where: { isMissing: false, enrichmentStatus: 'rate_limited' },
+        select: { id: true, fileName: true, title: true, enrichmentError: true, retryCount: true },
+        take: 10,
+      }),
+      prisma.bookSummary.findMany({
+        where: { isMissing: false, enrichmentStatus: 'failed' },
+        select: { id: true, fileName: true, title: true, enrichmentError: true, retryCount: true },
+        take: 10,
+      }),
+    ]);
+
+    const stats = await getDetailedScanStats();
+
+    return {
+      stats,
+      samples: {
+        enriched,
+        pending,
+        rateLimited,
+        failed,
+      },
+      summary: {
+        totalFiles,
+        enrichedCount: stats.totalEnriched,
+        pendingCount: stats.totalPending,
+        rateLimitedCount: stats.totalRateLimited,
+        failedCount: stats.totalFailed,
+      },
+    };
   }),
 
   // Books procedures

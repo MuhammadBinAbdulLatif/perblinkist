@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { prisma } from './prisma';
 
 export interface CleanedTitleResult {
   title: string;
@@ -19,13 +20,93 @@ export interface BookMetadataResult {
   source: 'google_books' | 'open_library' | 'fallback';
 }
 
+export class RateLimitError extends Error {
+  public retryAfterSeconds: number;
+  constructor(message: string, retryAfterSeconds: number = 60) {
+    super(message);
+    this.name = 'RateLimitError';
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+
+/**
+ * Persistent Rate Limit & Cooldown Manager
+ * Tracks exponential backoff: 1 min (60s) -> 2 mins (120s) -> 3 mins (180s)...
+ */
+class RateLimiter {
+  private cooldownUntil: number = 0;
+  private consecutiveLimits: number = 0;
+  private lastReason?: string;
+
+  public async init() {
+    try {
+      const setting = await prisma.setting.findUnique({
+        where: { key: 'rate_limit_cooldown_until' },
+      });
+      if (setting && setting.value) {
+        const storedTime = parseInt(setting.value, 10);
+        if (storedTime > Date.now()) {
+          this.cooldownUntil = storedTime;
+        }
+      }
+    } catch {
+      // Best-effort setting read
+    }
+  }
+
+  public getStatus(): { isRateLimited: boolean; remainingSeconds: number; reason?: string } {
+    const now = Date.now();
+    if (this.cooldownUntil > now) {
+      return {
+        isRateLimited: true,
+        remainingSeconds: Math.ceil((this.cooldownUntil - now) / 1000),
+        reason: this.lastReason,
+      };
+    }
+    return { isRateLimited: false, remainingSeconds: 0 };
+  }
+
+  public async triggerRateLimit(reason: string, customSeconds?: number): Promise<number> {
+    this.consecutiveLimits++;
+    // Backoff ladder: 1 min, 2 min, 3 min (max 15 mins)
+    const backoffMinutes = Math.min(this.consecutiveLimits, 15);
+    const waitSeconds = customSeconds ?? backoffMinutes * 60;
+    this.cooldownUntil = Date.now() + waitSeconds * 1000;
+    this.lastReason = reason;
+
+    try {
+      await prisma.setting.upsert({
+        where: { key: 'rate_limit_cooldown_until' },
+        create: {
+          key: 'rate_limit_cooldown_until',
+          value: this.cooldownUntil.toString(),
+        },
+        update: {
+          value: this.cooldownUntil.toString(),
+        },
+      });
+    } catch {
+      // Best effort DB sync
+    }
+
+    console.warn(`[RateLimiter] Rate limit triggered: ${reason}. Cooldown for ${waitSeconds} seconds.`);
+    return waitSeconds;
+  }
+
+  public resetCooldown() {
+    this.consecutiveLimits = 0;
+    this.cooldownUntil = 0;
+    this.lastReason = undefined;
+    prisma.setting.delete({ where: { key: 'rate_limit_cooldown_until' } }).catch(() => {});
+  }
+}
+
+export const rateLimiter = new RateLimiter();
+// Initialize from DB
+rateLimiter.init().catch(() => {});
+
 /**
  * Clean audio filenames and extract likely title and author.
- * Supports patterns like:
- * - "The Talent Code (Daniel Coyle).mka" -> Title: "The Talent Code", Author: "Daniel Coyle"
- * - "Yes We (Still) Can (Dan Pfeiffer).mka" -> Title: "Yes We (Still) Can", Author: "Dan Pfeiffer"
- * - "[Blinkist] Atomic Habits by James Clear (128kbps).mp3" -> Title: "Atomic Habits", Author: "James Clear"
- * - "James Clear - Atomic Habits.m4a" -> Title: "Atomic Habits", Author: "James Clear"
  */
 export function cleanFileName(fileName: string): CleanedTitleResult {
   const ext = path.extname(fileName);
@@ -42,13 +123,11 @@ export function cleanFileName(fileName: string): CleanedTitleResult {
   baseName = baseName.replace(/[_\s]+/g, ' ').trim();
 
   // 3. Pattern: "<Title> (<Author>)" where (<Author>) is the LAST set of parentheses
-  // Example: "Yes We (Still) Can (Dan Pfeiffer)" -> Title: "Yes We (Still) Can", Author: "Dan Pfeiffer"
   const parenMatch = baseName.match(/^(.*?)\s*\(([^()]+)\)$/);
   if (parenMatch) {
     const candidateTitle = parenMatch[1].trim();
-    let candidateAuthor = parenMatch[2].trim();
+    const candidateAuthor = parenMatch[2].trim();
 
-    // Check if candidateAuthor is "Unknown" or a real author
     if (candidateAuthor.toLowerCase() === 'unknown') {
       return {
         title: candidateTitle,
@@ -84,9 +163,14 @@ export function cleanFileName(fileName: string): CleanedTitleResult {
 }
 
 /**
- * Fetch book metadata from Google Books API
+ * Fetch book metadata from Google Books API with 429 detection
  */
 async function fetchGoogleBooks(query: string, authorHint?: string): Promise<BookMetadataResult | null> {
+  const status = rateLimiter.getStatus();
+  if (status.isRateLimited) {
+    throw new RateLimitError(`Rate limit active. Please wait ${status.remainingSeconds}s`, status.remainingSeconds);
+  }
+
   try {
     let q = `intitle:${encodeURIComponent(query)}`;
     if (authorHint) {
@@ -97,6 +181,11 @@ async function fetchGoogleBooks(query: string, authorHint?: string): Promise<Boo
       headers: { 'User-Agent': 'PerBlinkist/1.0' },
     });
 
+    if (res.status === 429) {
+      const waitSec = await rateLimiter.triggerRateLimit('Google Books API HTTP 429');
+      throw new RateLimitError('Google Books API rate limited', waitSec);
+    }
+
     if (!res.ok) return null;
     const data = await res.json();
     if (!data.items || data.items.length === 0) {
@@ -104,7 +193,13 @@ async function fetchGoogleBooks(query: string, authorHint?: string): Promise<Boo
       let fallbackQ = encodeURIComponent(query);
       if (authorHint) fallbackQ += `+${encodeURIComponent(authorHint)}`;
       const fallbackRes = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${fallbackQ}&maxResults=3`);
+      
+      if (fallbackRes.status === 429) {
+        const waitSec = await rateLimiter.triggerRateLimit('Google Books API HTTP 429');
+        throw new RateLimitError('Google Books API rate limited', waitSec);
+      }
       if (!fallbackRes.ok) return null;
+
       const fallbackData = await fallbackRes.json();
       if (!fallbackData.items || fallbackData.items.length === 0) return null;
       data.items = fallbackData.items;
@@ -139,15 +234,21 @@ async function fetchGoogleBooks(query: string, authorHint?: string): Promise<Boo
       source: 'google_books',
     };
   } catch (err) {
+    if (err instanceof RateLimitError) throw err;
     console.error('Google Books API fetch failed:', err);
     return null;
   }
 }
 
 /**
- * Fetch fallback metadata from Open Library API
+ * Fetch fallback metadata from Open Library API with 429 detection
  */
 async function fetchOpenLibrary(query: string, authorHint?: string): Promise<BookMetadataResult | null> {
+  const status = rateLimiter.getStatus();
+  if (status.isRateLimited) {
+    throw new RateLimitError(`Rate limit active. Please wait ${status.remainingSeconds}s`, status.remainingSeconds);
+  }
+
   try {
     let q = `title=${encodeURIComponent(query)}`;
     if (authorHint) {
@@ -157,6 +258,11 @@ async function fetchOpenLibrary(query: string, authorHint?: string): Promise<Boo
     const res = await fetch(`https://openlibrary.org/search.json?${q}&limit=2`, {
       headers: { 'User-Agent': 'PerBlinkist/1.0' },
     });
+
+    if (res.status === 429) {
+      const waitSec = await rateLimiter.triggerRateLimit('Open Library API HTTP 429');
+      throw new RateLimitError('Open Library API rate limited', waitSec);
+    }
 
     if (!res.ok) return null;
     const data = await res.json();
@@ -178,6 +284,7 @@ async function fetchOpenLibrary(query: string, authorHint?: string): Promise<Boo
       source: 'open_library',
     };
   } catch (err) {
+    if (err instanceof RateLimitError) throw err;
     console.error('Open Library API fetch failed:', err);
     return null;
   }
