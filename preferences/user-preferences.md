@@ -9,6 +9,8 @@ This document preserves the user's architectural and workflow preferences for **
   - Modern, full-stack, cohesive, enterprise-grade ecosystem.
   - Server components, Server Actions / Route Handlers for file scanning & streaming, eliminating split multi-server bloat.
   - No 1980s-feeling legacy setups; sleek, modern DX with high ecosystem support.
+- **ORM / Database**: **Prisma** with SQLite.
+  - Type-safe models, clean schema migrations, and high developer ergonomics.
 
 ## 2. Package Manager
 - **Always use `pnpm`** instead of `npm` or `yarn`.

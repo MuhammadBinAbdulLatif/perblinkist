@@ -1,0 +1,52 @@
+// Prisma schema for PerBlinkist
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model BookSummary {
+  id              String   @id @default(cuid())
+  filePath        String   @unique // Relative or absolute path to audio file in /media
+  fileHash        String?  // MD5 or mtime+size hash for fast change detection
+  fileSize        Int?     // Size in bytes
+  fileName        String   // Original file name (e.g. "James Clear - Atomic Habits.mp3")
+
+  // Metadata extracted or fetched from Google Books / Open Library
+  title           String
+  author          String?
+  durationSeconds Float?   // Audio duration in seconds
+  coverUrl        String?  // Remote or local cover URL
+  localCoverPath  String?  // Path to cached image in /config/cache/covers
+  synopsis        String?  // Book description/summary
+  category        String?  // Primary genre / category (e.g. Productivity, Psychology)
+  publisher       String?
+  publishedYear   Int?
+  isbn            String?
+
+  // Ingestion status
+  matchedSource   String?  // "google_books", "open_library", or "filename_fallback"
+  isEnriched      Boolean  @default(false)
+
+  // Playback state
+  playbackPosition Float   @default(0) // Last playback timestamp in seconds
+  isCompleted      Boolean @default(false)
+  lastPlayedAt     DateTime?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([title])
+  @@index([author])
+  @@index([category])
+}
+
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}

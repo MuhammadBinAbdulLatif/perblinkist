@@ -10,7 +10,7 @@ This document defines the selected technology stack, architectural decisions, an
 |---|---|---|
 | **Full-Stack Framework** | **Next.js (App Router, TypeScript, React 19)** | Unified modern full-stack web application. Server Components, Route Handlers (streaming audio, directory scanning), no split client/server bloat. |
 | **Package Manager** | **pnpm** | Ultra-fast, disk-efficient symlink-based package management. |
-| **Database** | **SQLite (via WAL mode + better-sqlite3 / Prisma)** | Zero-config embedded database. Highly portable for Dockerized self-hosting. |
+| **Database & ORM** | **Prisma ORM + SQLite (WAL mode)** | Fully type-safe models, automated migrations, zero-config embedded storage suited for containerized self-hosting. |
 | **Styling & UI** | **Tailwind CSS + Lucide Icons + Radix / Tailwind-merge** | Modern, sophisticated Blinkist-like UI with smooth animations, dark-mode first, and responsive audio dock. |
 | **Metadata Providers** | **Google Books API + Open Library API** | High coverage open APIs for book covers, author names, publishers, descriptions, and categories. |
 | **Containerization** | **Docker & Docker Compose (Standalone Next.js output)** | Single self-contained container with `/media` and `/config` volume mounts. |
