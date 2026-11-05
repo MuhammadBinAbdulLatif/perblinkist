@@ -5,7 +5,7 @@ FROM node:20-alpine AS base
 RUN apk add --no-cache libc6-compat openssl
 RUN corepack enable && corepack prepare pnpm@10.15.0 --activate
 
-# 1. Install dependencies
+# 1. Install ALL dependencies (including devDeps — needed for prisma CLI + build tools)
 FROM base AS deps
 WORKDIR /app
 
@@ -21,7 +21,10 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Generate Prisma Client
+# Generate Prisma Client.
+# DATABASE_URL must be syntactically valid at generate time (actual value used only at runtime).
+ENV DATABASE_URL="file:/tmp/build-placeholder.db"
+
 RUN pnpm exec prisma generate
 
 ENV NEXT_TELEMETRY_DISABLED=1
@@ -47,7 +50,10 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/prisma ./prisma
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.pnpm ./node_modules/.pnpm
+
+# Copy the generated Prisma client
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@prisma ./node_modules/@prisma
 
 # Create mount points and permissions
 RUN mkdir -p /media /config/cache/covers
