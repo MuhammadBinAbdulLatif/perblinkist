@@ -1,17 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
+import { Readable } from 'stream';
 import { prisma } from '@/lib/prisma';
 
 const MIME_MAP: Record<string, string> = {
+  '.mka': 'audio/webm; codecs=opus',
+  '.opus': 'audio/ogg; codecs=opus',
+  '.ogg': 'audio/ogg',
   '.mp3': 'audio/mpeg',
   '.m4a': 'audio/mp4',
   '.aac': 'audio/aac',
   '.flac': 'audio/flac',
-  '.ogg': 'audio/ogg',
-  '.opus': 'audio/opus',
   '.wav': 'audio/wav',
 };
+
+/**
+ * Resolve audio file location across local development and Docker volume mounts
+ */
+export function resolveAudioPath(storedPath: string): string | null {
+  // 1. Direct path exists
+  if (fs.existsSync(storedPath)) return storedPath;
+
+  // 2. Check MEDIA_DIR or /media
+  const mediaDir = process.env.MEDIA_DIR || path.join(process.cwd(), 'media');
+  const candidateInMedia = path.join(mediaDir, path.basename(storedPath));
+  if (fs.existsSync(candidateInMedia)) return candidateInMedia;
+
+  // 3. Check example-files
+  const exampleCandidate = path.join(process.cwd(), 'example-files', path.basename(storedPath));
+  if (fs.existsSync(exampleCandidate)) return exampleCandidate;
+
+  return null;
+}
 
 export async function GET(
   req: NextRequest,
@@ -23,54 +44,73 @@ export async function GET(
     where: { id },
   });
 
-  if (!book || !fs.existsSync(book.filePath)) {
-    return new NextResponse('Audio file not found', { status: 404 });
+  if (!book) {
+    return new NextResponse('Audiobook summary not found in catalog', { status: 404 });
   }
 
-  const stat = fs.statSync(book.filePath);
+  const realFilePath = resolveAudioPath(book.filePath);
+  if (!realFilePath || !fs.existsSync(realFilePath)) {
+    return new NextResponse('Audio media file not found on storage', { status: 404 });
+  }
+
+  const stat = fs.statSync(realFilePath);
   const fileSize = stat.size;
+  const ext = path.extname(realFilePath).toLowerCase();
+  const contentType = MIME_MAP[ext] || 'audio/webm; codecs=opus';
+
   const range = req.headers.get('range');
-  const ext = path.extname(book.filePath).toLowerCase();
-  const contentType = MIME_MAP[ext] || 'audio/mpeg';
 
   if (range) {
-    // Parse Range Header e.g. "bytes=0-1024"
-    const parts = range.replace(/bytes=/, '').split('-');
-    const start = parseInt(parts[0], 10);
-    const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+    // Standard RFC 7233 Range parser: "bytes=0-1024" or "bytes=1024-"
+    const match = range.match(/bytes=(\d*)-(\d*)/);
+    if (!match) {
+      return new NextResponse('Invalid Range format', { status: 400 });
+    }
 
-    if (start >= fileSize || end >= fileSize) {
+    const rawStart = match[1];
+    const rawEnd = match[2];
+
+    const start = rawStart ? parseInt(rawStart, 10) : 0;
+    const end = rawEnd ? parseInt(rawEnd, 10) : fileSize - 1;
+
+    // Check bounds
+    if (start >= fileSize || end >= fileSize || start > end) {
       return new NextResponse('Requested range not satisfiable', {
         status: 416,
         headers: {
           'Content-Range': `bytes */${fileSize}`,
+          'Accept-Ranges': 'bytes',
         },
       });
     }
 
-    const chunksize = end - start + 1;
-    const fileStream = fs.createReadStream(book.filePath, { start, end });
+    const chunkSize = end - start + 1;
+    const nodeStream = fs.createReadStream(realFilePath, { start, end });
+    const webStream = Readable.toWeb(nodeStream);
 
-    // Stream Partial Content (206)
-    return new NextResponse(fileStream as unknown as ReadableStream, {
+    return new NextResponse(webStream as unknown as ReadableStream, {
       status: 206,
       headers: {
         'Content-Range': `bytes ${start}-${end}/${fileSize}`,
         'Accept-Ranges': 'bytes',
-        'Content-Length': chunksize.toString(),
+        'Content-Length': chunkSize.toString(),
         'Content-Type': contentType,
+        'Cache-Control': 'no-cache',
       },
     });
   }
 
-  // Fallback: Full audio stream (200)
-  const fullStream = fs.createReadStream(book.filePath);
-  return new NextResponse(fullStream as unknown as ReadableStream, {
+  // Full file stream (HTTP 200)
+  const nodeStream = fs.createReadStream(realFilePath);
+  const webStream = Readable.toWeb(nodeStream);
+
+  return new NextResponse(webStream as unknown as ReadableStream, {
     status: 200,
     headers: {
       'Content-Length': fileSize.toString(),
       'Accept-Ranges': 'bytes',
       'Content-Type': contentType,
+      'Cache-Control': 'no-cache',
     },
   });
 }
