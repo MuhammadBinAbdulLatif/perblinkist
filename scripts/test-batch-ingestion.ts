@@ -1,6 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { fastIndexMediaDirectory, processBatchEnrichment, getDetailedScanStats } from '../lib/scanner';
-import { rateLimiter } from '../lib/metadata';
+import { rateLimiter, providerLimiter } from '../lib/metadata';
 
 async function testBatchIngestion() {
   console.log('=====================================================');
@@ -33,16 +33,16 @@ async function testBatchIngestion() {
     console.log(`Rate limit cooldown: ${batchRes.cooldownSeconds}s`);
   }
 
-  console.log('\n--- Step 4: Simulate & Verify Rate Limit Exponential Backoff (1m, 2m, 3m) ---');
-  const wait1 = await rateLimiter.triggerRateLimit('Simulated 429 Step 1');
+  console.log('\n--- Step 4: Simulate & Verify Per-Provider Rate Limit Backoff ---');
+  const wait1 = providerLimiter.limitProvider('google_books', 60);
   console.log(`Backoff Tier 1: ${wait1}s (Expected: 60s)`);
   if (wait1 !== 60) throw new Error(`Expected 60s cooldown, got ${wait1}s`);
 
-  const wait2 = await rateLimiter.triggerRateLimit('Simulated 429 Step 2');
+  const wait2 = providerLimiter.limitProvider('google_books', 120);
   console.log(`Backoff Tier 2: ${wait2}s (Expected: 120s)`);
   if (wait2 !== 120) throw new Error(`Expected 120s cooldown, got ${wait2}s`);
 
-  const wait3 = await rateLimiter.triggerRateLimit('Simulated 429 Step 3');
+  const wait3 = providerLimiter.limitProvider('google_books', 180);
   console.log(`Backoff Tier 3: ${wait3}s (Expected: 180s)`);
   if (wait3 !== 180) throw new Error(`Expected 180s cooldown, got ${wait3}s`);
 

@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '../lib/prisma';
-import { GET, resolveAudioPath } from '../app/api/stream/[id]/route';
+import { GET } from '../app/api/stream/[id]/route';
+import { resolveAudioPath } from '../lib/audio';
 
 async function runStreamTests() {
   console.log('=====================================================');

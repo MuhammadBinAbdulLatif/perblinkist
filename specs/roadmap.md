@@ -15,19 +15,24 @@ This roadmap organizes the development of PerBlinkist into phased milestones, mo
 ---
 
 ## Phase 2: Directory Ingestion & Metadata Pipeline
-- [ ] **Directory Scanner (`lib/scanner.ts`)**:
+- [x] **Directory Scanner (`lib/scanner.ts`)**:
   - Recursive directory scanner for audio files (`.mp3`, `.m4a`, `.aac`, `.flac`, `.ogg`).
   - File size and modification time tracking for fast incremental rescans without re-reading unchanged files.
-  - Scan trigger and progress status API route (`/api/scan`).
-- [ ] **Heuristic Title Parser (`lib/metadata.ts`)**:
+  - Scan trigger and progress status API route (tRPC `syncLibrary` / `getScanStatus`).
+- [x] **Heuristic Title Parser (`lib/metadata.ts`)**:
   - Regex cleaner for tags, bracketed strings, bitrate markers, and separator parsing (`Author - Title` vs `Title`).
-- [ ] **Metadata Fetching Service**:
-  - Google Books API client with rate-limiting & backoff.
-  - Open Library API fallback.
+- [x] **Metadata Fetching Service**:
+  - Google Books API client with per-provider rate-limiting & exponential backoff.
+  - Open Library API fallback; Wikipedia teaser fallback.
   - Upsert discovered summaries into SQLite via Prisma.
-- [ ] **Local Asset Cache**:
+- [x] **Local Asset Cache**:
   - Download and optimize cover posters to `config/cache/covers/`.
   - Stylish initials/gradient fallback placeholder when no remote cover is found.
+- [x] **Automatic Startup Ingestion** (`instrumentation.ts`, `specs/startup-ingestion/`):
+  - `instrumentation.ts` `register()` hook triggers on Node.js server boot (3 s delay, guarded by `AUTO_SCAN_ON_STARTUP`).
+  - `runFullOrchestratedIngestion({ autoResumeOnRateLimit: true })` — sleeps through cooldowns and continues automatically.
+  - Per-provider rate limiter (Google Books / Open Library) replaces global block; API key lowers inter-request delay from 500 ms → 100 ms.
+  - Supports libraries of 3 000+ titles (up to 10 000 batches × 10 books).
 
 ---
 

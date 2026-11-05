@@ -310,11 +310,23 @@ export async function processBatchEnrichment(batchSize: number = 10): Promise<{
     };
   }
 
-  // Pick up to batchSize items that need enrichment
+  // Cooldown has cleared — reset any 'rate_limited' books back to 'pending' so they get retried
+  await prisma.bookSummary.updateMany({
+    where: { isMissing: false, enrichmentStatus: 'rate_limited' },
+    data: { enrichmentStatus: 'pending' },
+  });
+
+  // Pick up to batchSize items that need enrichment.
+  // 'failed' books are retried up to MAX_RETRY_COUNT times only — prevents
+  // permanently-unresolvable titles from wasting API quota on every boot.
+  const MAX_RETRY_COUNT = 3;
   const booksToEnrich = await prisma.bookSummary.findMany({
     where: {
       isMissing: false,
-      enrichmentStatus: { in: ['pending', 'rate_limited', 'failed'] },
+      OR: [
+        { enrichmentStatus: { in: ['pending', 'rate_limited'] } },
+        { enrichmentStatus: 'failed', retryCount: { lt: MAX_RETRY_COUNT } },
+      ],
     },
     take: batchSize,
     orderBy: [{ retryCount: 'asc' }, { updatedAt: 'asc' }],
@@ -339,8 +351,9 @@ export async function processBatchEnrichment(batchSize: number = 10): Promise<{
   for (const book of booksToEnrich) {
     activeStats.currentFile = book.fileName;
     try {
-      // Gentle micro-delay between requests (300ms) to avoid instantaneous burst 429s
-      await new Promise((resolve) => setTimeout(resolve, 300));
+      // Dynamic inter-request delay: shorter with an API key, more cautious without
+      const requestDelay = process.env.GOOGLE_BOOKS_API_KEY ? 100 : 500;
+      await new Promise((resolve) => setTimeout(resolve, requestDelay));
 
       const bookMeta = await resolveBookMetadata(book.fileName, {
         title: book.embeddedTitle || undefined,
@@ -438,6 +451,7 @@ let isOrchestratorRunning = false;
 export async function runFullOrchestratedIngestion(options?: {
   mediaDirectory?: string;
   maxBatches?: number;
+  autoResumeOnRateLimit?: boolean;
 }): Promise<DetailedScanStats> {
   if (isOrchestratorRunning) {
     return getDetailedScanStats();
@@ -453,6 +467,8 @@ export async function runFullOrchestratedIngestion(options?: {
     // 2. Loop in batches of 10
     let batchIndex = 0;
     const maxBatches = options?.maxBatches || 10000; // supports up to 100,000 files
+    // Default: auto-resume enabled unless explicitly disabled
+    const autoResume = options?.autoResumeOnRateLimit !== false;
 
     while (batchIndex < maxBatches) {
       batchIndex++;
@@ -461,9 +477,23 @@ export async function runFullOrchestratedIngestion(options?: {
       const batchResult = await processBatchEnrichment(10);
 
       if (batchResult.rateLimited) {
-        console.warn(`[Batch Orchestrator] Rate limit hit during batch ${batchIndex}. Pausing worker...`);
-        // We pause and exit the active loop so server doesn't spin; UI or cron resumes when cooldown ends
-        break;
+        if (autoResume) {
+          const sleepMs = ((batchResult.cooldownSeconds ?? 60) + 5) * 1000;
+          console.log(
+            `[Batch Orchestrator] Rate limited on batch ${batchIndex}. ` +
+            `Sleeping ${Math.round(sleepMs / 1000)}s then resuming...`,
+          );
+          activeStats.status = 'rate_limited';
+          // Release the lock while sleeping so the UI can still query status
+          isOrchestratorRunning = false;
+          await new Promise((resolve) => setTimeout(resolve, sleepMs));
+          isOrchestratorRunning = true;
+          continue; // resume the batch loop
+        } else {
+          console.warn(`[Batch Orchestrator] Rate limit hit during batch ${batchIndex}. Pausing worker...`);
+          // Pause and exit the active loop so server doesn't spin; UI or cron resumes when cooldown ends
+          break;
+        }
       }
 
       if (batchResult.remainingPending === 0) {

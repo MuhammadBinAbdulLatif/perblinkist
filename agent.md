@@ -89,10 +89,11 @@ perblinkist/
 - Do not skip ahead or implement items out of order.
 
 ### Rule 3: Git Commit & GitHub Push Policy
-> [!IMPORTANT]
-> **Commit Frequency & Push Cadence**:
-> - **Commit**: Make a Git commit after every good, meaningful chunk of work or code change (e.g. creating a feature spec, completing a schema migration, implementing a router).
-> - **Push to GitHub**: Once a complete specification/milestone is finished and fully validated, push the branch to GitHub so all changes are preserved, reviewed, and versioned.
+> [!CAUTION]
+> **STRICT USER COMMAND REQUIREMENT**:
+> - **DO NOT COMMIT OR PUSH TO GITHUB AUTOMATICALLY**.
+> - All `git commit` and `git push` commands MUST ONLY be executed when explicitly commanded by the user in a prompt.
+> - Work locally, make changes, verify, and ask or wait for the user's explicit command before making any Git commit or pushing to GitHub.
 
 ### Rule 4: Technology & Architecture Guardrails
 - **Framework**: Modern Next.js with **tRPC** (`server/routers/app.ts`) + `@tanstack/react-query` for all client-server communication.
