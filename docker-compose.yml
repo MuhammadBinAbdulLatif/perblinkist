@@ -1,0 +1,21 @@
+services:
+  perblinkist:
+    image: perblinkist:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: perblinkist
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=file:/config/perblinkist.db
+      - MEDIA_DIR=/media
+      - JWT_SECRET=change-this-to-a-very-secure-random-secret
+    volumes:
+      # Persistent configuration & SQLite database
+      - ./config:/config
+      # Mount your host audio summaries directory here (Read-Only)
+      - ./media:/media:ro
