@@ -13,8 +13,11 @@ import {
   Search,
   FolderSync,
   Loader2,
+  LogOut,
+  User as UserIcon,
 } from 'lucide-react';
 import { trpc } from '@/lib/trpc';
+import { AuthModal } from '@/components/AuthModal';
 
 interface BookSummary {
   id: string;
@@ -38,6 +41,15 @@ export default function Home() {
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
+  // Authentication status query
+  const authStatusQuery = trpc.auth.status.useQuery();
+  const logoutMutation = trpc.auth.logout.useMutation({
+    onSuccess: (data) => {
+      document.cookie = data.cookie;
+      authStatusQuery.refetch();
+    },
+  });
+
   // tRPC queries & mutations
   const randomBooksQuery = trpc.getRandomBooks.useQuery({ limit: 8 });
   const recentBooksQuery = trpc.getRecentBooks.useQuery({ limit: 4 });
@@ -53,12 +65,15 @@ export default function Home() {
   const triggerScanMutation = trpc.triggerScan.useMutation({
     onSuccess: () => {
       scanStatusQuery.refetch();
+      randomBooksQuery.refetch();
     },
   });
 
   const updateProgressMutation = trpc.updateProgress.useMutation();
 
   const isScanning = scanStatusQuery.data?.status === 'scanning';
+  const currentUser = authStatusQuery.data?.currentUser;
+  const isInitialized = authStatusQuery.data?.initialized ?? true;
 
   // Spotlight book: first random or featured
   const spotlightBook = randomBooksQuery.data?.[0] || null;
@@ -143,12 +158,22 @@ export default function Home() {
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  const displayedBooks = searchQuery.trim().length > 0
-    ? searchQueryHook.data || []
-    : randomBooksQuery.data || [];
+  const displayedBooks =
+    searchQuery.trim().length > 0 ? searchQueryHook.data || [] : randomBooksQuery.data || [];
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-white">
+      {/* Auth Modal when unauthenticated */}
+      {authStatusQuery.data && !currentUser && (
+        <AuthModal
+          isInitialized={isInitialized}
+          onSuccess={() => {
+            authStatusQuery.refetch();
+            randomBooksQuery.refetch();
+          }}
+        />
+      )}
+
       {/* Hidden audio element */}
       <audio
         ref={audioRef}
@@ -184,18 +209,31 @@ export default function Home() {
             />
           </div>
 
-          <div className="flex items-center gap-4 text-sm font-medium">
+          <div className="flex items-center gap-3 text-sm font-medium">
             <button
               onClick={() => triggerScanMutation.mutate()}
               disabled={isScanning}
-              className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-800 hover:bg-slate-750 border border-slate-700 text-slate-200 text-xs transition disabled:opacity-60"
+              className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-800 hover:bg-slate-750 border border-slate-750 text-slate-200 text-xs transition disabled:opacity-60 cursor-pointer"
             >
               <FolderSync className={`w-3.5 h-3.5 text-emerald-400 ${isScanning ? 'animate-spin' : ''}`} />
-              <span>{isScanning ? 'Scanning media...' : 'Rescan Directory'}</span>
+              <span>{isScanning ? 'Syncing...' : 'Sync Library'}</span>
             </button>
-            <span className="px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-semibold">
-              tRPC + Next.js
-            </span>
+
+            {currentUser && (
+              <div className="flex items-center gap-2 pl-2 border-l border-slate-800">
+                <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 text-xs font-semibold">
+                  <UserIcon className="w-3.5 h-3.5" />
+                  <span>{currentUser.username}</span>
+                </span>
+                <button
+                  onClick={() => logoutMutation.mutate()}
+                  title="Sign Out"
+                  className="p-1.5 rounded-full text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition cursor-pointer"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </header>
@@ -214,13 +252,14 @@ export default function Home() {
               </h1>
               <p className="text-lg text-emerald-300 font-medium">by {spotlightBook.author || 'Unknown Author'}</p>
               <p className="text-slate-300 text-sm md:text-base leading-relaxed line-clamp-3">
-                {spotlightBook.synopsis || 'Comprehensive bite-sized summary extracted from your personal media library.'}
+                {spotlightBook.synopsis ||
+                  'Comprehensive bite-sized summary extracted from your personal media library.'}
               </p>
 
               <div className="pt-2 flex items-center gap-4">
                 <button
                   onClick={() => togglePlay(spotlightBook)}
-                  className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold px-6 py-3 rounded-full transition shadow-lg shadow-emerald-500/25 active:scale-95"
+                  className="flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-bold px-6 py-3 rounded-full transition shadow-lg shadow-emerald-500/25 active:scale-95 cursor-pointer"
                 >
                   {isPlaying && currentBook?.id === spotlightBook.id ? (
                     <>
@@ -262,7 +301,8 @@ export default function Home() {
               <BookOpen className="w-10 h-10 text-slate-600 mx-auto" />
               <h3 className="text-lg font-semibold text-slate-300">No audiobook summaries found</h3>
               <p className="text-sm text-slate-500 max-w-md mx-auto">
-                Place your audio summary files into the <code className="text-emerald-400">/media</code> folder and click &quot;Rescan Directory&quot; above.
+                Place your audio summary files into the <code className="text-emerald-400">/media</code> folder and
+                click &quot;Sync Library&quot; above.
               </p>
             </div>
           ) : (
@@ -271,7 +311,7 @@ export default function Home() {
                 <div
                   key={book.id}
                   onClick={() => togglePlay(book)}
-                  className="group cursor-pointer rounded-2xl bg-slate-900 border border-slate-800 p-4 hover:border-emerald-500/40 hover:bg-slate-850 transition duration-200 flex flex-col justify-between"
+                  className="group cursor-pointer rounded-2xl bg-slate-900 border border-slate-800 p-4 hover:border-emerald-500/40 hover:bg-slate-850 transition duration-200 flex flex-col justify-between shadow-lg shadow-black/20"
                 >
                   <div className="space-y-3">
                     <div className="relative aspect-[3/4] w-full rounded-xl overflow-hidden bg-slate-800 flex items-center justify-center">
@@ -300,12 +340,12 @@ export default function Home() {
                     </div>
                   </div>
 
-                  <div className="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+                  <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
                     <span className="flex items-center gap-1.5">
                       <BookOpen className="w-3.5 h-3.5 text-slate-500" />{' '}
                       {Math.round((book.durationSeconds || 900) / 60)} min
                     </span>
-                    <div className="w-7 h-7 rounded-full bg-emerald-500/10 text-emerald-400 group-hover:bg-emerald-500 group-hover:text-slate-950 transition flex items-center justify-center">
+                    <div className="w-7 h-7 rounded-full bg-emerald-500/10 text-emerald-400 group-hover:bg-gradient-to-tr group-hover:from-emerald-500 group-hover:to-teal-400 group-hover:text-slate-950 transition flex items-center justify-center shadow-sm">
                       <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
                     </div>
                   </div>
@@ -346,14 +386,14 @@ export default function Home() {
               <div className="flex items-center gap-4">
                 <button
                   onClick={() => skipSeconds(-15)}
-                  className="text-slate-400 hover:text-white transition"
+                  className="text-slate-400 hover:text-white transition cursor-pointer"
                   title="Rewind 15s"
                 >
                   <SkipBack className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => togglePlay(currentBook)}
-                  className="w-10 h-10 rounded-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 flex items-center justify-center transition shadow-md shadow-emerald-500/20"
+                  className="w-10 h-10 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 flex items-center justify-center transition shadow-md shadow-emerald-500/20 cursor-pointer"
                 >
                   {isPlaying ? (
                     <Pause className="w-5 h-5 fill-current" />
@@ -363,7 +403,7 @@ export default function Home() {
                 </button>
                 <button
                   onClick={() => skipSeconds(30)}
-                  className="text-slate-400 hover:text-white transition"
+                  className="text-slate-400 hover:text-white transition cursor-pointer"
                   title="Forward 30s"
                 >
                   <SkipForward className="w-4 h-4" />
@@ -378,7 +418,7 @@ export default function Home() {
                   className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden cursor-pointer relative"
                 >
                   <div
-                    className="h-full bg-emerald-500 rounded-full transition-all"
+                    className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all"
                     style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
                   />
                 </div>
@@ -390,7 +430,7 @@ export default function Home() {
             <div className="flex items-center gap-3 text-slate-400">
               <button
                 onClick={cyclePlaybackRate}
-                className="text-xs font-semibold hover:text-white px-2 py-1 rounded bg-slate-800 transition"
+                className="text-xs font-semibold hover:text-white px-2 py-1 rounded bg-slate-800 transition cursor-pointer"
               >
                 {playbackRate}x
               </button>

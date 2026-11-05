@@ -1,15 +1,19 @@
 import { z } from 'zod';
-import { router, publicProcedure } from '@/server/trpc';
+import { router, publicProcedure, protectedProcedure } from '@/server/trpc';
 import { prisma } from '@/lib/prisma';
 import { runMediaScan, getScanStatus } from '@/lib/scanner';
+import { authRouter } from './auth';
 
 export const appRouter = router({
-  // Scan procedures
+  // Sub-routers
+  auth: authRouter,
+
+  // Scan procedures (protected: only logged-in users/admins can trigger scans)
   getScanStatus: publicProcedure.query(async () => {
     return getScanStatus();
   }),
 
-  triggerScan: publicProcedure.mutation(async () => {
+  triggerScan: protectedProcedure.mutation(async () => {
     const current = getScanStatus();
     if (current.status === 'scanning') {
       return { success: false, message: 'Scan already in progress', status: current };
@@ -33,7 +37,10 @@ export const appRouter = router({
       const items = await prisma.bookSummary.findMany({
         take: limit + 1,
         cursor: cursor ? { id: cursor } : undefined,
-        where: category ? { category } : undefined,
+        where: {
+          category: category ? category : undefined,
+          isMissing: false,
+        },
         orderBy: { createdAt: 'desc' },
       });
 
@@ -52,13 +59,14 @@ export const appRouter = router({
   getRandomBooks: publicProcedure
     .input(z.object({ limit: z.number().min(1).max(50).default(6) }))
     .query(async ({ input }) => {
-      const count = await prisma.bookSummary.count();
+      const count = await prisma.bookSummary.count({ where: { isMissing: false } });
       if (count === 0) return [];
 
       const sampleSize = Math.min(input.limit, count);
       const skip = Math.max(0, Math.floor(Math.random() * Math.max(1, count - sampleSize)));
 
       const books = await prisma.bookSummary.findMany({
+        where: { isMissing: false },
         take: sampleSize,
         skip,
       });
@@ -73,6 +81,7 @@ export const appRouter = router({
         take: input.limit,
         where: {
           lastPlayedAt: { not: null },
+          isMissing: false,
         },
         orderBy: { lastPlayedAt: 'desc' },
       });
@@ -85,6 +94,7 @@ export const appRouter = router({
       return prisma.bookSummary.findMany({
         take: limit,
         where: {
+          isMissing: false,
           OR: [
             { title: { contains: query } },
             { author: { contains: query } },
