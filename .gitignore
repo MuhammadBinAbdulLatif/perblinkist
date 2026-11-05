@@ -1,0 +1,27 @@
+# Node / Dependencies
+node_modules/
+dist/
+build/
+.cache/
+
+# Databases & local user data
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+config/
+media/
+cache/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# OS & Editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.vscode/
+.idea/
