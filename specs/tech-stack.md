@@ -8,11 +8,12 @@ This document defines the selected technology stack, architectural decisions, an
 
 | Layer | Technology | Rationale |
 |---|---|---|
-| **Backend Framework** | **Go (Golang)** with **Gin** or **Fiber** (or **Node.js / Fastify + TypeScript**) | Ultra-fast file scanning, low memory footprint (~20MB in Docker), excellent HTTP/audio streaming support, single static binary execution. |
-| **Database** | **SQLite (via WAL mode) + Prisma/GORM/SQLC** | Zero-config embedded database. Perfectly suited for self-hosted apps without spinning up a heavy separate Postgres/MySQL container. |
-| **Frontend Framework** | **React + Vite + Tailwind CSS + Lucide Icons + TanStack Query** | High-performance SPA with modern Blinkist-like polish, smooth responsive carousels, bottom audio bar player, fast client-side routing. |
-| **Metadata Providers** | **Google Books API + Open Library API** | High coverage open APIs for book covers, author names, publishers, descriptions, and categories. Free with no credit card required. |
-| **Containerization** | **Docker & Docker Compose (Multi-stage build)** | Single self-contained image bundling backend + static frontend frontend assets + SQLite volume mount + media directory mount. |
+| **Full-Stack Framework** | **Next.js (App Router, TypeScript, React 19)** | Unified modern full-stack web application. Server Components, Route Handlers (streaming audio, directory scanning), no split client/server bloat. |
+| **Package Manager** | **pnpm** | Ultra-fast, disk-efficient symlink-based package management. |
+| **Database** | **SQLite (via WAL mode + better-sqlite3 / Prisma)** | Zero-config embedded database. Highly portable for Dockerized self-hosting. |
+| **Styling & UI** | **Tailwind CSS + Lucide Icons + Radix / Tailwind-merge** | Modern, sophisticated Blinkist-like UI with smooth animations, dark-mode first, and responsive audio dock. |
+| **Metadata Providers** | **Google Books API + Open Library API** | High coverage open APIs for book covers, author names, publishers, descriptions, and categories. |
+| **Containerization** | **Docker & Docker Compose (Standalone Next.js output)** | Single self-contained container with `/media` and `/config` volume mounts. |
 
 ---
 

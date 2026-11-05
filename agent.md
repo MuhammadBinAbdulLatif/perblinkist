@@ -5,6 +5,9 @@ Welcome to **PerBlinkist**! This document serves as the primary system brief and
 ---
 
 ## 1. Project Overview & Identity
+- **Preferences & Standards**: Preserved in [`preferences/user-preferences.md`](file:///d:/projects/monos/perblinkist/preferences/user-preferences.md).
+  - **Framework**: Next.js (App Router, TypeScript) or TanStack Start. Cohesive modern full-stack architecture.
+  - **Package Manager**: **pnpm** exclusively.
 - **Name**: PerBlinkist
 - **Core Concept**: A lightweight, self-hosted, Dockerized Blinkist alternative for personal audiobook summaries and audio files.
 - **Two Defining Pillars**:
