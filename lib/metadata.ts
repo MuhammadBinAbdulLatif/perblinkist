@@ -21,60 +21,65 @@ export interface BookMetadataResult {
 
 /**
  * Clean audio filenames and extract likely title and author.
- * Examples:
+ * Supports patterns like:
+ * - "The Talent Code (Daniel Coyle).mka" -> Title: "The Talent Code", Author: "Daniel Coyle"
+ * - "Yes We (Still) Can (Dan Pfeiffer).mka" -> Title: "Yes We (Still) Can", Author: "Dan Pfeiffer"
  * - "[Blinkist] Atomic Habits by James Clear (128kbps).mp3" -> Title: "Atomic Habits", Author: "James Clear"
  * - "James Clear - Atomic Habits.m4a" -> Title: "Atomic Habits", Author: "James Clear"
- * - "Summary of Thinking, Fast and Slow.mp3" -> Title: "Thinking, Fast and Slow"
  */
 export function cleanFileName(fileName: string): CleanedTitleResult {
   const ext = path.extname(fileName);
-  let baseName = path.basename(fileName, ext);
+  let baseName = path.basename(fileName, ext).trim();
 
-  // 1. Remove bracketed quality, platform markers, or tags: [Blinkist], (128kbps), [Audiobook], etc.
+  // 1. Remove bracketed quality, platform markers, or tags: [Blinkist], (128kbps), etc.
   baseName = baseName.replace(/\[[^\]]*\]/g, ' ');
   baseName = baseName.replace(/\([^)]*(?:kbps|audiobook|summary|blinkist|complete|unabridged)[^)]*\)/gi, ' ');
   baseName = baseName.replace(/\b(?:128|192|256|320)kbps\b/gi, ' ');
-  baseName = baseName.replace(/\b(?:mp3|m4a|aac|flac|ogg)\b/gi, ' ');
+  baseName = baseName.replace(/\b(?:mp3|m4a|aac|flac|ogg|mka|opus)\b/gi, ' ');
 
   // 2. Remove common prefixes like "Summary of", "Book Summary -", etc.
   baseName = baseName.replace(/^\s*(?:summary\s+of|book\s+summary(?:\s*[-:]|\s+of)?)\s+/i, '');
-
-  // 3. Clean multiple spaces, underscores, dashes
   baseName = baseName.replace(/[_\s]+/g, ' ').trim();
 
-  // 4. Try parsing "Title by Author"
+  // 3. Pattern: "<Title> (<Author>)" where (<Author>) is the LAST set of parentheses
+  // Example: "Yes We (Still) Can (Dan Pfeiffer)" -> Title: "Yes We (Still) Can", Author: "Dan Pfeiffer"
+  const parenMatch = baseName.match(/^(.*?)\s*\(([^()]+)\)$/);
+  if (parenMatch) {
+    const candidateTitle = parenMatch[1].trim();
+    let candidateAuthor = parenMatch[2].trim();
+
+    // Check if candidateAuthor is "Unknown" or a real author
+    if (candidateAuthor.toLowerCase() === 'unknown') {
+      return {
+        title: candidateTitle,
+        author: undefined,
+        rawFileName: fileName,
+      };
+    }
+
+    return {
+      title: candidateTitle,
+      author: candidateAuthor,
+      rawFileName: fileName,
+    };
+  }
+
+  // 4. Pattern: "<Title> by <Author>" or "<Author> - <Title>"
   const byMatch = baseName.match(/^(.*?)\s+(?:by|-)\s+(.*)$/i);
   if (byMatch) {
     const part1 = byMatch[1].trim();
     const part2 = byMatch[2].trim();
 
-    // If part1 looks like a well-known author format or vice versa:
-    // Usually "Atomic Habits by James Clear" -> part1 = title, part2 = author
     return {
       title: part1,
       author: part2,
-      rawFileName: fileName
+      rawFileName: fileName,
     };
-  }
-
-  // 5. Try parsing "Author - Title"
-  if (baseName.includes(' - ')) {
-    const parts = baseName.split(' - ');
-    if (parts.length >= 2) {
-      // Heuristic: If part 1 has <= 3 words, it's often the author, part 2 is title
-      const p1 = parts[0].trim();
-      const p2 = parts.slice(1).join(' - ').trim();
-      return {
-        title: p2,
-        author: p1,
-        rawFileName: fileName
-      };
-    }
   }
 
   return {
     title: baseName,
-    rawFileName: fileName
+    rawFileName: fileName,
   };
 }
 
@@ -83,31 +88,39 @@ export function cleanFileName(fileName: string): CleanedTitleResult {
  */
 async function fetchGoogleBooks(query: string, authorHint?: string): Promise<BookMetadataResult | null> {
   try {
-    let q = encodeURIComponent(query);
+    let q = `intitle:${encodeURIComponent(query)}`;
     if (authorHint) {
       q += `+inauthor:${encodeURIComponent(authorHint)}`;
     }
 
     const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=3`, {
       headers: { 'User-Agent': 'PerBlinkist/1.0' },
-      next: { revalidate: 86400 } // cache 24h
     });
 
     if (!res.ok) return null;
     const data = await res.json();
-    if (!data.items || data.items.length === 0) return null;
+    if (!data.items || data.items.length === 0) {
+      // Try relaxed query without strict intitle prefix
+      let fallbackQ = encodeURIComponent(query);
+      if (authorHint) fallbackQ += `+${encodeURIComponent(authorHint)}`;
+      const fallbackRes = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${fallbackQ}&maxResults=3`);
+      if (!fallbackRes.ok) return null;
+      const fallbackData = await fallbackRes.json();
+      if (!fallbackData.items || fallbackData.items.length === 0) return null;
+      data.items = fallbackData.items;
+    }
 
     const item = data.items[0];
     const info = item.volumeInfo || {};
 
-    let coverUrl = info.imageLinks?.extraLarge ||
+    let coverUrl =
+      info.imageLinks?.extraLarge ||
       info.imageLinks?.large ||
       info.imageLinks?.medium ||
       info.imageLinks?.thumbnail ||
       info.imageLinks?.smallThumbnail;
 
     if (coverUrl) {
-      // Prefer HTTPS
       coverUrl = coverUrl.replace(/^http:\/\//i, 'https://');
     }
 
@@ -123,7 +136,7 @@ async function fetchGoogleBooks(query: string, authorHint?: string): Promise<Boo
       publisher: info.publisher,
       publishedYear: typeof year === 'number' && !isNaN(year) ? year : undefined,
       isbn: isbns[0],
-      source: 'google_books'
+      source: 'google_books',
     };
   } catch (err) {
     console.error('Google Books API fetch failed:', err);
@@ -142,7 +155,7 @@ async function fetchOpenLibrary(query: string, authorHint?: string): Promise<Boo
     }
 
     const res = await fetch(`https://openlibrary.org/search.json?${q}&limit=2`, {
-      headers: { 'User-Agent': 'PerBlinkist/1.0' }
+      headers: { 'User-Agent': 'PerBlinkist/1.0' },
     });
 
     if (!res.ok) return null;
@@ -162,7 +175,7 @@ async function fetchOpenLibrary(query: string, authorHint?: string): Promise<Boo
       publisher: doc.publisher && doc.publisher.length > 0 ? doc.publisher[0] : undefined,
       publishedYear: doc.first_publish_year,
       isbn: doc.isbn && doc.isbn.length > 0 ? doc.isbn[0] : undefined,
-      source: 'open_library'
+      source: 'open_library',
     };
   } catch (err) {
     console.error('Open Library API fetch failed:', err);
@@ -202,27 +215,33 @@ export async function cacheCoverImage(bookId: string, remoteUrl: string): Promis
 }
 
 /**
- * Orchestrator: Try Google Books first, then Open Library, then fall back to cleaned filename.
+ * Orchestrator: Combines filename parsing, embedded tags hint, Google Books, and Open Library.
  */
-export async function resolveBookMetadata(fileName: string): Promise<BookMetadataResult> {
+export async function resolveBookMetadata(
+  fileName: string,
+  embeddedHints?: { title?: string; author?: string; genre?: string }
+): Promise<BookMetadataResult> {
   const cleaned = cleanFileName(fileName);
+  const queryTitle = embeddedHints?.title || cleaned.title;
+  const queryAuthor = embeddedHints?.author || cleaned.author;
 
   // 1. Primary: Google Books
-  const googleResult = await fetchGoogleBooks(cleaned.title, cleaned.author);
+  const googleResult = await fetchGoogleBooks(queryTitle, queryAuthor);
   if (googleResult) {
     return googleResult;
   }
 
   // 2. Secondary: Open Library
-  const openLibraryResult = await fetchOpenLibrary(cleaned.title, cleaned.author);
+  const openLibraryResult = await fetchOpenLibrary(queryTitle, queryAuthor);
   if (openLibraryResult) {
     return openLibraryResult;
   }
 
-  // 3. Fallback: Cleaned Title & Author
+  // 3. Fallback: Cleaned Title & Author with embedded tags
   return {
-    title: cleaned.title,
-    author: cleaned.author,
-    source: 'fallback'
+    title: queryTitle,
+    author: queryAuthor,
+    category: embeddedHints?.genre,
+    source: 'fallback',
   };
 }
