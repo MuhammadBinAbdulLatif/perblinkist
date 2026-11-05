@@ -4,6 +4,8 @@ import React, { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { trpc } from '@/lib/trpc';
 import { Logo } from './Logo';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 
 interface AuthScreenProps {
   isInitialized: boolean;
@@ -63,9 +65,8 @@ export function AuthScreen({ isInitialized, onSuccess }: AuthScreenProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex bg-zinc-950 text-zinc-100 font-sans">
-      {/* Left Half: Editorial / Quote Side (50% desktop split) */}
+      {/* Left Half: Editorial / Quotation (50% desktop split) */}
       <div className="hidden lg:flex lg:w-1/2 relative flex-col justify-between p-12 bg-zinc-900 border-r border-zinc-800">
-        {/* Background dark overlay with subtle monochrome depth */}
         <div
           className="absolute inset-0 bg-cover bg-center opacity-20 filter grayscale contrast-125"
           style={{
@@ -98,10 +99,9 @@ export function AuthScreen({ isInitialized, onSuccess }: AuthScreenProps) {
         </div>
       </div>
 
-      {/* Right Half: Clean Shadcn Form Side */}
+      {/* Right Half: Official Shadcn Form Components */}
       <div className="flex-1 flex flex-col justify-center items-center p-8 sm:p-12 lg:p-16 bg-zinc-950">
         <div className="w-full max-w-sm space-y-6">
-          {/* Mobile logo header */}
           <div className="lg:hidden flex items-center gap-2.5 mb-2">
             <Logo size={20} className="text-white" />
             <span className="font-semibold text-base tracking-tight text-white">PerBlinkist</span>
@@ -127,49 +127,49 @@ export function AuthScreen({ isInitialized, onSuccess }: AuthScreenProps) {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <label className="text-xs font-medium text-zinc-300">Username</label>
-              <input
+              <Input
                 type="text"
                 required
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="admin"
-                className="w-full rounded-md border border-zinc-800 bg-zinc-900/60 px-3.5 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-400 transition"
+                className="bg-zinc-900/60 border-zinc-800 text-zinc-100 placeholder:text-zinc-600 focus-visible:ring-zinc-400"
               />
             </div>
 
             {!isInitialized && (
               <div className="space-y-2">
                 <label className="text-xs font-medium text-zinc-300">Email (Optional)</label>
-                <input
+                <Input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="admin@example.com"
-                  className="w-full rounded-md border border-zinc-800 bg-zinc-900/60 px-3.5 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-400 transition"
+                  className="bg-zinc-900/60 border-zinc-800 text-zinc-100 placeholder:text-zinc-600 focus-visible:ring-zinc-400"
                 />
               </div>
             )}
 
             <div className="space-y-2">
               <label className="text-xs font-medium text-zinc-300">Password</label>
-              <input
+              <Input
                 type="password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••••••"
-                className="w-full rounded-md border border-zinc-800 bg-zinc-900/60 px-3.5 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-400 transition"
+                className="bg-zinc-900/60 border-zinc-800 text-zinc-100 placeholder:text-zinc-600 focus-visible:ring-zinc-400"
               />
             </div>
 
-            <button
+            <Button
               type="submit"
               disabled={isLoading}
-              className="w-full mt-2 rounded-md bg-white hover:bg-zinc-200 text-zinc-950 font-medium py-2 px-4 text-sm transition focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:ring-offset-2 focus:ring-offset-zinc-950 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full mt-2 bg-white hover:bg-zinc-200 text-zinc-950 font-medium cursor-pointer"
             >
-              {isLoading && <Loader2 className="w-4 h-4 animate-spin text-zinc-950" />}
+              {isLoading && <Loader2 className="w-4 h-4 animate-spin text-zinc-950 mr-2" />}
               <span>{isInitialized ? 'Sign in' : 'Create account'}</span>
-            </button>
+            </Button>
           </form>
 
           <p className="text-xs text-zinc-500 text-center">
