@@ -1,6 +1,9 @@
 # Media Directory (Mounted via Docker or local testing)
 media/
 config/
+example-files/
+
+# SQLite
 *.db
 *.db-journal
 *.db-wal
@@ -13,11 +16,7 @@ node_modules/
 out/
 build/
 dist/
-example-files/
 
-example-files
-
-example-files/
 # Logs
 npm-debug.log*
 yarn-debug.log*
@@ -35,5 +34,6 @@ Thumbs.db
 *.swo
 .vscode/
 .idea/
-/example-files/
+
+# Generated
 /app/generated/prisma
