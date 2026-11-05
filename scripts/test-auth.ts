@@ -41,8 +41,8 @@ async function testAuthSystem() {
   // 3. First-Run Setup Flow via tRPC Router Caller
   console.log('--- Test 3: First-Run Admin Setup Flow ---');
 
-  // Clean test user if exists
-  await prisma.user.deleteMany({ where: { username: 'testadmin' } });
+  // Clean admin users for fresh test run
+  await prisma.user.deleteMany({ where: { isAdmin: true } });
 
   const caller = appRouter.createCaller({ user: null, req: new Request('http://localhost:3000') });
 
@@ -50,6 +50,8 @@ async function testAuthSystem() {
     username: 'testadmin',
     password: 'SuperAdminPassword123!',
     email: 'admin@perblinkist.local',
+    securityQuestion: 'What was the name of your first pet?',
+    securityAnswer: 'Rover',
   });
 
   console.log(`Created Admin User: ${setupRes.user.username} (ID: ${setupRes.user.id})`);
@@ -66,6 +68,8 @@ async function testAuthSystem() {
     await caller.auth.setupAdmin({
       username: 'hacker',
       password: 'hackedpassword',
+      securityQuestion: 'What was your first car?',
+      securityAnswer: 'Civic',
     });
     throw new Error('Test 4 Failed: Allowed duplicate admin registration!');
   } catch (err: any) {

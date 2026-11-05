@@ -2,7 +2,16 @@ import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { router, publicProcedure, protectedProcedure } from '../trpc';
 import { prisma } from '@/lib/prisma';
-import { hashPassword, verifyPassword, signAuthToken, createAuthCookie, createClearAuthCookie } from '@/lib/auth';
+import {
+  hashPassword,
+  verifyPassword,
+  hashSecurityAnswer,
+  verifySecurityAnswer,
+  signAuthToken,
+  createAuthCookie,
+  createClearAuthCookie,
+  SECURITY_QUESTIONS,
+} from '@/lib/auth';
 
 export const authRouter = router({
   // Check if system is initialized (has at least 1 user) and return current session
@@ -11,6 +20,7 @@ export const authRouter = router({
     return {
       initialized: userCount > 0,
       currentUser: ctx.user,
+      securityQuestions: SECURITY_QUESTIONS,
     };
   }),
 
@@ -21,6 +31,8 @@ export const authRouter = router({
         username: z.string().min(3).max(30),
         password: z.string().min(6),
         email: z.string().email().optional(),
+        securityQuestion: z.string().min(3),
+        securityAnswer: z.string().min(1),
       })
     )
     .mutation(async ({ input }) => {
@@ -33,12 +45,16 @@ export const authRouter = router({
       }
 
       const passwordHash = await hashPassword(input.password);
+      const securityAnswerHash = await hashSecurityAnswer(input.securityAnswer);
+
       const user = await prisma.user.create({
         data: {
           username: input.username.trim(),
           email: input.email?.trim(),
           passwordHash,
           isAdmin: true,
+          securityQuestion: input.securityQuestion.trim(),
+          securityAnswerHash,
         },
       });
 
@@ -51,6 +67,61 @@ export const authRouter = router({
       return {
         success: true,
         user: { id: user.id, username: user.username, isAdmin: true },
+        cookie: createAuthCookie(token),
+      };
+    }),
+
+  // Standard user sign-up
+  register: publicProcedure
+    .input(
+      z.object({
+        username: z.string().min(3).max(30),
+        password: z.string().min(6),
+        email: z.string().email().optional(),
+        securityQuestion: z.string().min(3),
+        securityAnswer: z.string().min(1),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const existing = await prisma.user.findFirst({
+        where: {
+          OR: [
+            { username: input.username.trim() },
+            ...(input.email ? [{ email: input.email.trim() }] : []),
+          ],
+        },
+      });
+
+      if (existing) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'A user with that username or email already exists.',
+        });
+      }
+
+      const passwordHash = await hashPassword(input.password);
+      const securityAnswerHash = await hashSecurityAnswer(input.securityAnswer);
+
+      const user = await prisma.user.create({
+        data: {
+          username: input.username.trim(),
+          email: input.email?.trim(),
+          passwordHash,
+          isAdmin: false,
+          securityQuestion: input.securityQuestion.trim(),
+          securityAnswerHash,
+        },
+      });
+
+      const token = signAuthToken({
+        userId: user.id,
+        username: user.username,
+        isAdmin: false,
+      });
+
+      return {
+        success: true,
+        user: { id: user.id, username: user.username, isAdmin: false },
         cookie: createAuthCookie(token),
       };
     }),
@@ -94,6 +165,83 @@ export const authRouter = router({
       return {
         success: true,
         user: { id: user.id, username: user.username, isAdmin: user.isAdmin },
+        cookie: createAuthCookie(token),
+      };
+    }),
+
+  // Get user's security question for password recovery
+  getSecurityQuestion: publicProcedure
+    .input(z.object({ username: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      const user = await prisma.user.findFirst({
+        where: {
+          OR: [{ username: input.username.trim() }, { email: input.username.trim() }],
+        },
+        select: { securityQuestion: true },
+      });
+
+      if (!user || !user.securityQuestion) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'No account found or no recovery question configured for this user.',
+        });
+      }
+
+      return {
+        question: user.securityQuestion,
+      };
+    }),
+
+  // Reset password using security answer
+  resetPasswordWithSecurityAnswer: publicProcedure
+    .input(
+      z.object({
+        username: z.string().min(1),
+        securityAnswer: z.string().min(1),
+        newPassword: z.string().min(6),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const user = await prisma.user.findFirst({
+        where: {
+          OR: [{ username: input.username.trim() }, { email: input.username.trim() }],
+        },
+      });
+
+      if (!user || !user.securityAnswerHash) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: 'User account not found or security answer missing.',
+        });
+      }
+
+      const isAnswerCorrect = await verifySecurityAnswer(
+        input.securityAnswer,
+        user.securityAnswerHash
+      );
+
+      if (!isAnswerCorrect) {
+        throw new TRPCError({
+          code: 'UNAUTHORIZED',
+          message: 'Incorrect answer to security question.',
+        });
+      }
+
+      const newPasswordHash = await hashPassword(input.newPassword);
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { passwordHash: newPasswordHash },
+      });
+
+      const token = signAuthToken({
+        userId: user.id,
+        username: user.username,
+        isAdmin: user.isAdmin,
+      });
+
+      return {
+        success: true,
+        message: 'Password reset successfully.',
         cookie: createAuthCookie(token),
       };
     }),

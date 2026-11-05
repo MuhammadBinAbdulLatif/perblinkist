@@ -12,6 +12,18 @@ export interface AuthUserPayload {
 }
 
 /**
+ * Standard Security Questions
+ */
+export const SECURITY_QUESTIONS = [
+  'What was the name of your first pet?',
+  'In which city or town were you born?',
+  'What was the make and model of your first car?',
+  'What was your childhood nickname?',
+  'What was the name of your elementary school?',
+  'What is your favorite book of all time?',
+] as const;
+
+/**
  * Hash password securely with bcrypt
  */
 export async function hashPassword(plainText: string): Promise<string> {
@@ -24,6 +36,23 @@ export async function hashPassword(plainText: string): Promise<string> {
  */
 export async function verifyPassword(plainText: string, hash: string): Promise<boolean> {
   return bcrypt.compare(plainText, hash);
+}
+
+/**
+ * Normalize and hash security answer
+ */
+export async function hashSecurityAnswer(rawAnswer: string): Promise<string> {
+  const normalized = rawAnswer.trim().toLowerCase();
+  const salt = await bcrypt.genSalt(10);
+  return bcrypt.hash(normalized, salt);
+}
+
+/**
+ * Verify security answer against stored hash
+ */
+export async function verifySecurityAnswer(rawAnswer: string, hash: string): Promise<boolean> {
+  const normalized = rawAnswer.trim().toLowerCase();
+  return bcrypt.compare(normalized, hash);
 }
 
 /**
