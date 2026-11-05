@@ -4,8 +4,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   Play,
   Pause,
-  Compass,
-  Sparkles,
   BookOpen,
   Volume2,
   SkipForward,
@@ -17,7 +15,8 @@ import {
   User as UserIcon,
 } from 'lucide-react';
 import { trpc } from '@/lib/trpc';
-import { AuthModal } from '@/components/AuthModal';
+import { AuthScreen } from '@/components/AuthScreen';
+import { Logo } from '@/components/Logo';
 
 interface BookSummary {
   id: string;
@@ -52,7 +51,6 @@ export default function Home() {
 
   // tRPC queries & mutations
   const randomBooksQuery = trpc.getRandomBooks.useQuery({ limit: 8 });
-  const recentBooksQuery = trpc.getRecentBooks.useQuery({ limit: 4 });
   const searchQueryHook = trpc.searchBooks.useQuery(
     { query: searchQuery, limit: 12 },
     { enabled: searchQuery.trim().length > 0 }
@@ -162,10 +160,10 @@ export default function Home() {
     searchQuery.trim().length > 0 ? searchQueryHook.data || [] : randomBooksQuery.data || [];
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-emerald-500 selection:text-white">
-      {/* Auth Modal when unauthenticated */}
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col font-sans selection:bg-zinc-800 selection:text-zinc-100">
+      {/* Formal Split-Screen Auth when unauthenticated */}
       {authStatusQuery.data && !currentUser && (
-        <AuthModal
+        <AuthScreen
           isInitialized={isInitialized}
           onSuccess={() => {
             authStatusQuery.refetch();
@@ -187,48 +185,46 @@ export default function Home() {
       />
 
       {/* Navigation Bar */}
-      <header className="sticky top-0 z-40 bg-slate-900/80 backdrop-blur-md border-b border-slate-800 px-6 py-4">
+      <header className="sticky top-0 z-40 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800 px-6 py-3.5">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-500/20">
-              <Sparkles className="w-5 h-5 text-slate-950 stroke-[2.5]" />
-            </div>
-            <span className="text-xl font-bold tracking-tight bg-gradient-to-r from-emerald-400 to-teal-200 bg-clip-text text-transparent">
+          <div className="flex items-center gap-2.5">
+            <Logo size={20} className="text-white" />
+            <span className="text-base font-semibold tracking-tight text-white">
               PerBlinkist
             </span>
           </div>
 
           <div className="flex-1 max-w-md relative">
-            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
             <input
               type="text"
-              placeholder="Search summaries by title, author, or topic..."
+              placeholder="Search summaries by title, author, or category..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-slate-850 border border-slate-750 rounded-full pl-10 pr-4 py-2 text-sm text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition"
+              className="w-full bg-zinc-900 border border-zinc-800 rounded-md pl-10 pr-4 py-1.5 text-sm text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500 transition"
             />
           </div>
 
-          <div className="flex items-center gap-3 text-sm font-medium">
+          <div className="flex items-center gap-3 text-sm">
             <button
               onClick={() => triggerScanMutation.mutate()}
               disabled={isScanning}
-              className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-800 hover:bg-slate-750 border border-slate-750 text-slate-200 text-xs transition disabled:opacity-60 cursor-pointer"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-zinc-300 text-xs font-medium transition disabled:opacity-50 cursor-pointer"
             >
-              <FolderSync className={`w-3.5 h-3.5 text-emerald-400 ${isScanning ? 'animate-spin' : ''}`} />
+              <FolderSync className={`w-3.5 h-3.5 ${isScanning ? 'animate-spin' : ''}`} />
               <span>{isScanning ? 'Syncing...' : 'Sync Library'}</span>
             </button>
 
             {currentUser && (
-              <div className="flex items-center gap-2 pl-2 border-l border-slate-800">
-                <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 text-xs font-semibold">
-                  <UserIcon className="w-3.5 h-3.5" />
+              <div className="flex items-center gap-2 pl-2 border-l border-zinc-800">
+                <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-zinc-900 border border-zinc-800 text-xs font-medium text-zinc-300">
+                  <UserIcon className="w-3.5 h-3.5 text-zinc-400" />
                   <span>{currentUser.username}</span>
                 </span>
                 <button
                   onClick={() => logoutMutation.mutate()}
                   title="Sign Out"
-                  className="p-1.5 rounded-full text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition cursor-pointer"
+                  className="p-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-900 transition cursor-pointer"
                 >
                   <LogOut className="w-4 h-4" />
                 </button>
@@ -242,16 +238,16 @@ export default function Home() {
       <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-8 pb-32 space-y-10">
         {/* Spotlight Hero Banner */}
         {spotlightBook && !searchQuery && (
-          <section className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-emerald-950/70 via-slate-900 to-slate-900 border border-emerald-500/20 p-8 md:p-10 shadow-xl shadow-emerald-950/20">
-            <div className="relative z-10 max-w-2xl space-y-4">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 text-xs font-semibold uppercase tracking-wider">
-                <Compass className="w-3.5 h-3.5" /> Spotlight Pick
+          <section className="relative overflow-hidden rounded-xl bg-zinc-900 border border-zinc-800 p-8 md:p-10">
+            <div className="relative z-10 max-w-2xl space-y-3.5">
+              <div className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium uppercase tracking-wider bg-zinc-800 text-zinc-400 border border-zinc-700/60">
+                Featured Summary
               </div>
-              <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight text-white leading-tight">
+              <h1 className="text-3xl md:text-4xl font-semibold tracking-tight text-white leading-tight">
                 {spotlightBook.title}
               </h1>
-              <p className="text-lg text-emerald-300 font-medium">by {spotlightBook.author || 'Unknown Author'}</p>
-              <p className="text-slate-300 text-sm md:text-base leading-relaxed line-clamp-3">
+              <p className="text-base text-zinc-400 font-normal">by {spotlightBook.author || 'Unknown Author'}</p>
+              <p className="text-zinc-300 text-sm leading-relaxed line-clamp-3">
                 {spotlightBook.synopsis ||
                   'Comprehensive bite-sized summary extracted from your personal media library.'}
               </p>
@@ -259,15 +255,15 @@ export default function Home() {
               <div className="pt-2 flex items-center gap-4">
                 <button
                   onClick={() => togglePlay(spotlightBook)}
-                  className="flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-bold px-6 py-3 rounded-full transition shadow-lg shadow-emerald-500/25 active:scale-95 cursor-pointer"
+                  className="flex items-center gap-2 bg-white hover:bg-zinc-200 text-zinc-950 font-medium px-5 py-2.5 rounded-md text-sm transition shadow-sm cursor-pointer"
                 >
                   {isPlaying && currentBook?.id === spotlightBook.id ? (
                     <>
-                      <Pause className="w-5 h-5 fill-current" /> Pause Summary
+                      <Pause className="w-4 h-4 fill-current" /> Pause Summary
                     </>
                   ) : (
                     <>
-                      <Play className="w-5 h-5 fill-current" /> Listen (
+                      <Play className="w-4 h-4 fill-current" /> Listen (
                       {Math.round((spotlightBook.durationSeconds || 900) / 60)} min)
                     </>
                   )}
@@ -281,72 +277,68 @@ export default function Home() {
         <section className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-bold tracking-tight text-white">
-                {searchQuery ? `Search Results for "${searchQuery}"` : 'Discover Something New'}
+              <h2 className="text-lg font-semibold tracking-tight text-white">
+                {searchQuery ? `Search Results for "${searchQuery}"` : 'Library Summaries'}
               </h2>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-zinc-500">
                 {searchQuery
                   ? `Found ${displayedBooks.length} summaries`
-                  : 'Randomized book summaries from your media directory'}
+                  : 'Curated audio summaries from your mounted directory'}
               </p>
             </div>
           </div>
 
           {randomBooksQuery.isLoading ? (
-            <div className="flex items-center justify-center py-20 text-slate-500">
-              <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
+            <div className="flex items-center justify-center py-20 text-zinc-600">
+              <Loader2 className="w-6 h-6 animate-spin" />
             </div>
           ) : displayedBooks.length === 0 ? (
-            <div className="text-center py-16 border border-dashed border-slate-800 rounded-3xl p-8 space-y-3">
-              <BookOpen className="w-10 h-10 text-slate-600 mx-auto" />
-              <h3 className="text-lg font-semibold text-slate-300">No audiobook summaries found</h3>
-              <p className="text-sm text-slate-500 max-w-md mx-auto">
-                Place your audio summary files into the <code className="text-emerald-400">/media</code> folder and
-                click &quot;Sync Library&quot; above.
+            <div className="text-center py-16 border border-dashed border-zinc-800 rounded-xl p-8 space-y-3">
+              <BookOpen className="w-8 h-8 text-zinc-600 mx-auto" />
+              <h3 className="text-base font-medium text-zinc-300">No summaries found</h3>
+              <p className="text-sm text-zinc-500 max-w-md mx-auto">
+                Place your audio summary files into the <code className="text-zinc-300">/media</code> folder and
+                click &quot;Sync Library&quot;.
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 gap-5">
               {displayedBooks.map((book) => (
                 <div
                   key={book.id}
                   onClick={() => togglePlay(book)}
-                  className="group cursor-pointer rounded-2xl bg-slate-900 border border-slate-800 p-4 hover:border-emerald-500/40 hover:bg-slate-850 transition duration-200 flex flex-col justify-between shadow-lg shadow-black/20"
+                  className="group cursor-pointer rounded-lg bg-zinc-900 border border-zinc-800 p-3 hover:border-zinc-700 transition flex flex-col justify-between"
                 >
-                  <div className="space-y-3">
-                    <div className="relative aspect-[3/4] w-full rounded-xl overflow-hidden bg-slate-800 flex items-center justify-center">
+                  <div className="space-y-2.5">
+                    <div className="relative aspect-[3/4] w-full rounded-md overflow-hidden bg-zinc-950 border border-zinc-850 flex items-center justify-center">
                       {book.localCoverPath || book.coverUrl ? (
                         <img
                           src={book.localCoverPath || book.coverUrl!}
                           alt={book.title}
-                          className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                          className="w-full h-full object-cover group-hover:scale-102 transition duration-200"
                         />
                       ) : (
-                        <div className="w-full h-full bg-gradient-to-br from-emerald-950 to-slate-900 flex flex-col items-center justify-center p-4 text-center">
-                          <BookOpen className="w-10 h-10 text-emerald-500/60 mb-2" />
-                          <span className="text-xs font-bold text-slate-300 line-clamp-2">{book.title}</span>
+                        <div className="w-full h-full bg-zinc-950 flex flex-col items-center justify-center p-3 text-center">
+                          <BookOpen className="w-8 h-8 text-zinc-600 mb-2" />
+                          <span className="text-xs font-medium text-zinc-400 line-clamp-2">{book.title}</span>
                         </div>
                       )}
-                      <div className="absolute inset-0 bg-slate-950/20 group-hover:bg-transparent transition" />
                     </div>
                     <div>
-                      <span className="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider">
+                      <span className="text-[10px] font-medium text-zinc-400 uppercase tracking-wider">
                         {book.category || 'General'}
                       </span>
-                      <h3 className="text-base font-bold text-white line-clamp-1 group-hover:text-emerald-300 transition">
+                      <h3 className="text-sm font-medium text-zinc-100 line-clamp-1 group-hover:text-white transition">
                         {book.title}
                       </h3>
-                      <p className="text-xs text-slate-400 line-clamp-1">{book.author || 'Unknown'}</p>
+                      <p className="text-xs text-zinc-500 line-clamp-1">{book.author || 'Unknown'}</p>
                     </div>
                   </div>
 
-                  <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
-                    <span className="flex items-center gap-1.5">
-                      <BookOpen className="w-3.5 h-3.5 text-slate-500" />{' '}
-                      {Math.round((book.durationSeconds || 900) / 60)} min
-                    </span>
-                    <div className="w-7 h-7 rounded-full bg-emerald-500/10 text-emerald-400 group-hover:bg-gradient-to-tr group-hover:from-emerald-500 group-hover:to-teal-400 group-hover:text-slate-950 transition flex items-center justify-center shadow-sm">
-                      <Play className="w-3.5 h-3.5 fill-current ml-0.5" />
+                  <div className="mt-3 pt-2.5 border-t border-zinc-800/60 flex items-center justify-between text-xs text-zinc-500">
+                    <span>{Math.round((book.durationSeconds || 900) / 60)} min</span>
+                    <div className="w-6 h-6 rounded-md bg-zinc-800 text-zinc-300 group-hover:bg-white group-hover:text-zinc-950 transition flex items-center justify-center">
+                      <Play className="w-3 h-3 fill-current ml-0.5" />
                     </div>
                   </div>
                 </div>
@@ -358,11 +350,11 @@ export default function Home() {
 
       {/* Persistent Bottom Audio Player Bar */}
       {currentBook && (
-        <aside className="fixed bottom-0 left-0 right-0 z-50 bg-slate-900/95 backdrop-blur-lg border-t border-slate-800 px-6 py-3.5 shadow-2xl">
+        <aside className="fixed bottom-0 left-0 right-0 z-50 bg-zinc-950/95 backdrop-blur-lg border-t border-zinc-800 px-6 py-3">
           <div className="max-w-7xl mx-auto flex items-center justify-between gap-6">
             {/* Book Info */}
-            <div className="flex items-center gap-3.5 min-w-[220px]">
-              <div className="w-12 h-14 rounded-lg overflow-hidden bg-slate-800 flex-shrink-0 shadow">
+            <div className="flex items-center gap-3 min-w-[200px]">
+              <div className="w-10 h-12 rounded overflow-hidden bg-zinc-900 border border-zinc-800 flex-shrink-0">
                 {currentBook.localCoverPath || currentBook.coverUrl ? (
                   <img
                     src={currentBook.localCoverPath || currentBook.coverUrl!}
@@ -370,14 +362,14 @@ export default function Home() {
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <div className="w-full h-full bg-emerald-950 flex items-center justify-center">
-                    <BookOpen className="w-5 h-5 text-emerald-400" />
+                  <div className="w-full h-full flex items-center justify-center">
+                    <BookOpen className="w-4 h-4 text-zinc-600" />
                   </div>
                 )}
               </div>
               <div className="overflow-hidden">
-                <h4 className="text-sm font-semibold text-white truncate">{currentBook.title}</h4>
-                <p className="text-xs text-slate-400 truncate">{currentBook.author || 'Unknown'}</p>
+                <h4 className="text-sm font-medium text-white truncate">{currentBook.title}</h4>
+                <p className="text-xs text-zinc-500 truncate">{currentBook.author || 'Unknown'}</p>
               </div>
             </div>
 
@@ -386,24 +378,24 @@ export default function Home() {
               <div className="flex items-center gap-4">
                 <button
                   onClick={() => skipSeconds(-15)}
-                  className="text-slate-400 hover:text-white transition cursor-pointer"
+                  className="text-zinc-400 hover:text-white transition cursor-pointer"
                   title="Rewind 15s"
                 >
                   <SkipBack className="w-4 h-4" />
                 </button>
                 <button
                   onClick={() => togglePlay(currentBook)}
-                  className="w-10 h-10 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 flex items-center justify-center transition shadow-md shadow-emerald-500/20 cursor-pointer"
+                  className="w-8 h-8 rounded-full bg-white hover:bg-zinc-200 text-zinc-950 flex items-center justify-center transition cursor-pointer"
                 >
                   {isPlaying ? (
-                    <Pause className="w-5 h-5 fill-current" />
+                    <Pause className="w-4 h-4 fill-current" />
                   ) : (
-                    <Play className="w-5 h-5 fill-current ml-0.5" />
+                    <Play className="w-4 h-4 fill-current ml-0.5" />
                   )}
                 </button>
                 <button
                   onClick={() => skipSeconds(30)}
-                  className="text-slate-400 hover:text-white transition cursor-pointer"
+                  className="text-zinc-400 hover:text-white transition cursor-pointer"
                   title="Forward 30s"
                 >
                   <SkipForward className="w-4 h-4" />
@@ -411,14 +403,14 @@ export default function Home() {
               </div>
 
               {/* Progress track */}
-              <div className="w-full flex items-center gap-3 text-[11px] text-slate-400">
+              <div className="w-full flex items-center gap-3 text-[11px] text-zinc-500">
                 <span>{formatTime(currentTime)}</span>
                 <div
                   onClick={handleSeek}
-                  className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden cursor-pointer relative"
+                  className="flex-1 h-1 bg-zinc-800 rounded-full overflow-hidden cursor-pointer relative"
                 >
                   <div
-                    className="h-full bg-gradient-to-r from-emerald-500 to-teal-400 rounded-full transition-all"
+                    className="h-full bg-white rounded-full transition-all"
                     style={{ width: `${duration > 0 ? (currentTime / duration) * 100 : 0}%` }}
                   />
                 </div>
@@ -427,14 +419,14 @@ export default function Home() {
             </div>
 
             {/* Extra Controls */}
-            <div className="flex items-center gap-3 text-slate-400">
+            <div className="flex items-center gap-3 text-zinc-400">
               <button
                 onClick={cyclePlaybackRate}
-                className="text-xs font-semibold hover:text-white px-2 py-1 rounded bg-slate-800 transition cursor-pointer"
+                className="text-xs font-medium hover:text-white px-2 py-0.5 rounded bg-zinc-900 border border-zinc-800 transition cursor-pointer"
               >
                 {playbackRate}x
               </button>
-              <Volume2 className="w-5 h-5 hover:text-white cursor-pointer" />
+              <Volume2 className="w-4 h-4 hover:text-white cursor-pointer" />
             </div>
           </div>
         </aside>
