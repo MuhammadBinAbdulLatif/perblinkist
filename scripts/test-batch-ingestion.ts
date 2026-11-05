@@ -23,8 +23,8 @@ async function testBatchIngestion() {
   console.log(`Total Rate-Limited: ${stats.totalRateLimited}`);
   console.log(`Total Failed: ${stats.totalFailed}\n`);
 
-  console.log('--- Step 3: Trigger 10-Item Controlled Batch Enrichment ---');
-  const batchRes = await processBatchEnrichment(10);
+  console.log('--- Step 3: Trigger Concurrent Batch Enrichment ---');
+  const batchRes = await processBatchEnrichment();
   console.log(`Batch processed: ${batchRes.processed} items`);
   console.log(`Enriched in this batch: ${batchRes.enriched}`);
   console.log(`Remaining pending: ${batchRes.remainingPending}`);

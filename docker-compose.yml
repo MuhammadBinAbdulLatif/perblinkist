@@ -16,6 +16,8 @@ services:
       - MEDIA_DIR=/media
       # Set to "false" to disable the automatic scan that runs on every server boot
       - AUTO_SCAN_ON_STARTUP=true
+      # Parallel metadata fetches per enrichment batch (1–8, default 5)
+      - ENRICH_CONCURRENCY=5
       - JWT_SECRET=change-this-to-a-very-secure-random-secret
     volumes:
       # Persistent configuration & SQLite database

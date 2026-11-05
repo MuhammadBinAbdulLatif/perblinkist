@@ -87,7 +87,7 @@ export async function runMediaScan(
 ): Promise<ScanProgress> {
   const start = Date.now();
   const indexRes = await fastIndexMediaDirectory(mediaDirectory);
-  const enrichRes = await processBatchEnrichment(10);
+  const enrichRes = await processBatchEnrichment(getEnrichBatchSize());
   const stats = await getDetailedScanStats();
 
   return {
@@ -284,11 +284,52 @@ export async function fastIndexMediaDirectory(mediaDirectory?: string): Promise<
 }
 
 /**
- * Stage 2: Controlled Batch Enrichment (10 items per cycle)
- * Pulls up to `batchSize` (default 10) records needing metadata.
- * Detects rate-limits and halts gracefully with retry counters.
+ * Parallelism for metadata enrichment. Override with ENRICH_CONCURRENCY (1–8).
+ * Kept modest so SQLite writes and upstream APIs stay stable.
  */
-export async function processBatchEnrichment(batchSize: number = 10): Promise<{
+export function getEnrichConcurrency(): number {
+  const raw = Number.parseInt(process.env.ENRICH_CONCURRENCY || '5', 10);
+  if (Number.isNaN(raw)) return 5;
+  return Math.min(8, Math.max(1, raw));
+}
+
+/** Default batch size sized to feed the concurrency pool for a few waves. */
+export function getEnrichBatchSize(): number {
+  return Math.min(50, Math.max(10, getEnrichConcurrency() * 4));
+}
+
+/**
+ * Run async work over items with a fixed worker-pool size.
+ * `shouldStop` prevents picking up new items (in-flight work still finishes).
+ */
+async function mapWithConcurrency<T>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T) => Promise<void>,
+  shouldStop?: () => boolean
+): Promise<void> {
+  let nextIndex = 0;
+
+  async function runWorker(): Promise<void> {
+    while (true) {
+      if (shouldStop?.()) return;
+      const index = nextIndex++;
+      if (index >= items.length) return;
+      await worker(items[index]);
+    }
+  }
+
+  const poolSize = Math.min(Math.max(1, concurrency), items.length);
+  await Promise.all(Array.from({ length: poolSize }, () => runWorker()));
+}
+
+/**
+ * Stage 2: Controlled Batch Enrichment
+ * Pulls up to `batchSize` records needing metadata and enriches them with a
+ * small concurrency pool. On RateLimitError, stops scheduling new work and
+ * lets in-flight workers finish.
+ */
+export async function processBatchEnrichment(batchSize: number = getEnrichBatchSize()): Promise<{
   processed: number;
   enriched: number;
   rateLimited: boolean;
@@ -346,67 +387,85 @@ export async function processBatchEnrichment(batchSize: number = 10): Promise<{
     };
   }
 
+  const concurrency = getEnrichConcurrency();
   activeStats.status = 'enriching';
   activeStats.batchSize = batchSize;
+
   let enrichedCount = 0;
+  let processedCount = 0;
   let rateLimitHit = false;
   let cooldownSec = 0;
+  let stopScheduling = false;
 
-  for (const book of booksToEnrich) {
-    activeStats.currentFile = book.fileName;
-    try {
-      // Dynamic inter-request delay: shorter with an API key, more cautious without
-      const requestDelay = process.env.GOOGLE_BOOKS_API_KEY ? 100 : 500;
-      await new Promise((resolve) => setTimeout(resolve, requestDelay));
+  // Dynamic inter-request delay: shorter with an API key, more cautious without
+  const requestDelay = process.env.GOOGLE_BOOKS_API_KEY ? 100 : 500;
 
-      const bookMeta = await resolveBookMetadata(book.fileName, {
-        title: book.embeddedTitle || undefined,
-        author: book.embeddedAuthor || undefined,
-        genre: book.category || undefined,
-      });
+  await mapWithConcurrency(
+    booksToEnrich,
+    concurrency,
+    async (book) => {
+      // Double-check after taking a slot — another worker may have tripped the limit
+      if (stopScheduling) return;
 
-      let localCover: string | null = book.localCoverPath;
-      if (bookMeta.coverUrl && !localCover) {
-        localCover = await cacheCoverImage(book.id, bookMeta.coverUrl);
-      }
+      processedCount++;
+      activeStats.currentFile = book.fileName;
 
-      await prisma.bookSummary.update({
-        where: { id: book.id },
-        data: {
-          title: bookMeta.title,
-          author: bookMeta.author,
-          synopsis: bookMeta.synopsis,
-          category: bookMeta.category || book.category || 'General',
-          publisher: bookMeta.publisher,
-          publishedYear: bookMeta.publishedYear,
-          isbn: bookMeta.isbn,
-          coverUrl: bookMeta.coverUrl,
-          localCoverPath: localCover,
-          matchedSource: bookMeta.source,
-          isEnriched: bookMeta.source !== 'fallback',
-          enrichmentStatus: 'enriched',
-          enrichmentError: null,
-          enrichedAt: new Date(),
-        },
-      });
+      try {
+        await new Promise<void>((resolve) => setTimeout(resolve, requestDelay));
 
-      enrichedCount++;
-    } catch (err) {
-      if (err instanceof RateLimitError) {
-        rateLimitHit = true;
-        cooldownSec = err.retryAfterSeconds;
+        // Abort after delay if a sibling worker hit the rate limit while we waited
+        if (stopScheduling) return;
 
-        // Flag current book and remaining as rate_limited
+        const bookMeta = await resolveBookMetadata(book.fileName, {
+          title: book.embeddedTitle || undefined,
+          author: book.embeddedAuthor || undefined,
+          genre: book.category || undefined,
+        });
+
+        let localCover: string | null = book.localCoverPath;
+        if (bookMeta.coverUrl && !localCover) {
+          localCover = await cacheCoverImage(book.id, bookMeta.coverUrl);
+        }
+
         await prisma.bookSummary.update({
           where: { id: book.id },
           data: {
-            enrichmentStatus: 'rate_limited',
-            enrichmentError: err.message,
-            retryCount: { increment: 1 },
+            title: bookMeta.title,
+            author: bookMeta.author,
+            synopsis: bookMeta.synopsis,
+            category: bookMeta.category || book.category || 'General',
+            publisher: bookMeta.publisher,
+            publishedYear: bookMeta.publishedYear,
+            isbn: bookMeta.isbn,
+            coverUrl: bookMeta.coverUrl,
+            localCoverPath: localCover,
+            matchedSource: bookMeta.source,
+            isEnriched: bookMeta.source !== 'fallback',
+            enrichmentStatus: 'enriched',
+            enrichmentError: null,
+            enrichedAt: new Date(),
           },
         });
-        break; // Stop current batch immediately
-      } else {
+
+        enrichedCount++;
+      } catch (err) {
+        if (err instanceof RateLimitError) {
+          // Stop new work; in-flight siblings finish or also land here
+          stopScheduling = true;
+          rateLimitHit = true;
+          cooldownSec = Math.max(cooldownSec, err.retryAfterSeconds);
+
+          await prisma.bookSummary.update({
+            where: { id: book.id },
+            data: {
+              enrichmentStatus: 'rate_limited',
+              enrichmentError: err.message,
+              retryCount: { increment: 1 },
+            },
+          });
+          return;
+        }
+
         const errorMsg = err instanceof Error ? err.message : String(err);
         await prisma.bookSummary.update({
           where: { id: book.id },
@@ -417,8 +476,9 @@ export async function processBatchEnrichment(batchSize: number = 10): Promise<{
           },
         });
       }
-    }
-  }
+    },
+    () => stopScheduling
+  );
 
   if (rateLimitHit) {
     activeStats.status = 'rate_limited';
@@ -436,7 +496,7 @@ export async function processBatchEnrichment(batchSize: number = 10): Promise<{
   await getDetailedScanStats();
 
   return {
-    processed: booksToEnrich.length,
+    processed: processedCount,
     enriched: enrichedCount,
     rateLimited: rateLimitHit,
     remainingPending,
@@ -446,9 +506,8 @@ export async function processBatchEnrichment(batchSize: number = 10): Promise<{
 
 /**
  * Continuous Batch Orchestrator
- * Runs indexing, then automatically processes 10 items at a time.
- * If rate limit is encountered, it pauses for the cooldown period (1 min, 2 min, etc.)
- * then resumes seamlessly.
+ * Runs indexing, then enriches in concurrent batches.
+ * If rate limit is encountered, it pauses for the cooldown period then resumes.
  */
 let isOrchestratorRunning = false;
 
@@ -463,29 +522,35 @@ export async function runFullOrchestratedIngestion(options?: {
 
   isOrchestratorRunning = true;
   const startTime = Date.now();
+  const batchSize = getEnrichBatchSize();
+  const concurrency = getEnrichConcurrency();
 
   try {
     // 1. Fast Index all local files
     await fastIndexMediaDirectory(options?.mediaDirectory);
 
-    // 2. Loop in batches of 10
+    // 2. Loop in concurrent batches
     let batchIndex = 0;
     const maxBatches = options?.maxBatches || 10000; // supports up to 100,000 files
     // Default: auto-resume enabled unless explicitly disabled
     const autoResume = options?.autoResumeOnRateLimit !== false;
 
+    console.log(
+      `[Batch Orchestrator] Enriching with concurrency=${concurrency}, batchSize=${batchSize}`
+    );
+
     while (batchIndex < maxBatches) {
       batchIndex++;
       activeStats.currentBatch = batchIndex;
 
-      const batchResult = await processBatchEnrichment(10);
+      const batchResult = await processBatchEnrichment(batchSize);
 
       if (batchResult.rateLimited) {
         if (autoResume) {
           const sleepMs = ((batchResult.cooldownSeconds ?? 60) + 5) * 1000;
           console.log(
             `[Batch Orchestrator] Rate limited on batch ${batchIndex}. ` +
-            `Sleeping ${Math.round(sleepMs / 1000)}s then resuming...`,
+              `Sleeping ${Math.round(sleepMs / 1000)}s then resuming...`
           );
           activeStats.status = 'rate_limited';
           // Release the lock while sleeping so the UI can still query status
@@ -494,7 +559,9 @@ export async function runFullOrchestratedIngestion(options?: {
           isOrchestratorRunning = true;
           continue; // resume the batch loop
         } else {
-          console.warn(`[Batch Orchestrator] Rate limit hit during batch ${batchIndex}. Pausing worker...`);
+          console.warn(
+            `[Batch Orchestrator] Rate limit hit during batch ${batchIndex}. Pausing worker...`
+          );
           // Pause and exit the active loop so server doesn't spin; UI or cron resumes when cooldown ends
           break;
         }

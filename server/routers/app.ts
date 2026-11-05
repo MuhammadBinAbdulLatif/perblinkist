@@ -26,14 +26,14 @@ export const appRouter = router({
     return fastIndexMediaDirectory();
   }),
 
-  // Stage 2: Process a single batch of 10 items
+  // Stage 2: Process a single concurrent enrichment batch
   processNextBatch: protectedProcedure
-    .input(z.object({ batchSize: z.number().min(1).max(50).default(10) }).optional())
+    .input(z.object({ batchSize: z.number().min(1).max(50).optional() }).optional())
     .mutation(async ({ input }) => {
-      return processBatchEnrichment(input?.batchSize || 10);
+      return processBatchEnrichment(input?.batchSize);
     }),
 
-  // Continuous Orchestrated Ingestion (Fast index + auto-batching in 10s with backoff)
+  // Continuous Orchestrated Ingestion (fast index + concurrent enrichment with backoff)
   triggerScan: protectedProcedure.mutation(async () => {
     // Run orchestrated pipeline in background
     runFullOrchestratedIngestion().catch((err) => console.error('[Scan] Error running orchestrated pipeline:', err));
