@@ -10,14 +10,16 @@ datasource db {
 }
 
 model BookSummary {
-  id              String   @id @default(cuid())
-  filePath        String   @unique // Relative or absolute path to audio file in /media
-  fileHash        String?  // MD5 or mtime+size hash for fast change detection
-  fileSize        Int?     // Size in bytes
-  fileName        String   // Original file name (e.g. "The Talent Code (Daniel Coyle).mka")
-  format          String?  // Audio format/container (e.g. "mka", "mp3")
-  codec           String?  // Codec (e.g. "OPUS", "AAC")
-  bitrate         Int?     // Bitrate in bps
+  id              String    @id @default(cuid())
+  filePath        String    @unique // Relative or absolute path to audio file in /media
+  fileHash        String?   // Signature hash
+  fileSize        Int?      // Size in bytes
+  fileMtime       DateTime? // Last modified timestamp of physical audio file
+  fileName        String    // Original file name (e.g. "The Talent Code (Daniel Coyle).mka")
+  format          String?   // Audio format/container (e.g. "mka", "mp3")
+  codec           String?   // Codec (e.g. "OPUS", "AAC")
+  bitrate         Int?      // Bitrate in bps
+  isMissing       Boolean   @default(false) // True if file disappeared from mounted volume
 
   // Embedded audio tags from file
   embeddedTitle   String?
@@ -26,30 +28,31 @@ model BookSummary {
   // Metadata extracted or fetched from Google Books / Open Library
   title           String
   author          String?
-  durationSeconds Float?   // Audio duration in seconds
-  coverUrl        String?  // Remote cover URL
-  localCoverPath  String?  // Path to cached image in /config/cache/covers
-  synopsis        String?  // Book description/summary
-  category        String?  // Primary genre / category (e.g. Productivity, Psychology)
+  durationSeconds Float?    // Audio duration in seconds
+  coverUrl        String?   // Remote cover URL
+  localCoverPath  String?   // Path to cached image in /config/cache/covers
+  synopsis        String?   // Book description/summary
+  category        String?   // Primary genre / category (e.g. Productivity, Psychology)
   publisher       String?
   publishedYear   Int?
   isbn            String?
 
   // Ingestion status
-  matchedSource   String?  // "google_books", "open_library", or "fallback"
-  isEnriched      Boolean  @default(false)
+  matchedSource   String?   // "google_books", "open_library", or "fallback"
+  isEnriched      Boolean   @default(false)
 
   // Playback state
-  playbackPosition Float   @default(0) // Last playback timestamp in seconds
-  isCompleted      Boolean @default(false)
+  playbackPosition Float    @default(0) // Last playback timestamp in seconds
+  isCompleted      Boolean  @default(false)
   lastPlayedAt     DateTime?
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   @@index([title])
   @@index([author])
   @@index([category])
+  @@index([isMissing])
 }
 
 model Setting {
