@@ -1,5 +1,7 @@
 # Design System & Visual Style Guide: PerBlinkist (Formal Shadcn Theme)
 
+> **Mobile:** See `specs/mobile-responsive-ui/` for responsive requirements. Shared chrome lives in `components/AppHeader.tsx` and `components/GlobalAudioPlayer.tsx`. Prefer stacking + drawer nav under `md`; keep desktop compositions intact at `lg+`.
+
 ## 1. Visual Philosophy & Core Aesthetic
 PerBlinkist adopts a **minimalist, formal, premium, monochromatic aesthetic** directly aligned with the official **shadcn/ui** design system (Zinc/Neutral Dark palette).
 

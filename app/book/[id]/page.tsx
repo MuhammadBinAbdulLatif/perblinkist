@@ -14,7 +14,6 @@ import {
   CheckCircle2,
   Clock,
   BookOpen,
-  ArrowLeft,
   Volume2,
   Sparkles,
   Info,
@@ -23,7 +22,7 @@ import {
 } from 'lucide-react';
 import { trpc } from '@/lib/trpc';
 import { useAudioPlayer } from '@/lib/player-context';
-import { GlobalSearchBar } from '@/components/GlobalSearchBar';
+import { AppHeader } from '@/components/AppHeader';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -115,42 +114,25 @@ function BookDetailContent({ params }: { params: Promise<{ id: string }> }) {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col pb-24">
-      {/* Top Navigation */}
-      <header className="sticky top-0 z-40 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800 px-6 py-3.5">
-        <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
-          <Link
-            href="/"
-            className="flex items-center gap-2 text-sm text-zinc-400 hover:text-white transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Dashboard</span>
-          </Link>
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col pb-32 md:pb-24">
+      <AppHeader
+        variant="back"
+        backHref="/"
+        backLabel="Dashboard"
+        trailingLabel={
+          <span className="flex items-center gap-1.5 text-xs text-zinc-400">
+            <Bookmark className="w-3.5 h-3.5" />
+            Detail
+          </span>
+        }
+      />
 
-          <GlobalSearchBar className="max-w-md hidden sm:block" />
-
-          <div className="flex items-center gap-3">
-            <Link href="/listen-later">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-zinc-400 hover:text-white hover:bg-zinc-900 gap-1.5"
-              >
-                <Bookmark className="w-3.5 h-3.5" />
-                <span>Listen Later</span>
-              </Button>
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="flex-1 max-w-5xl w-full mx-auto px-6 py-10 space-y-12">
+      <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-8 sm:space-y-12">
         {/* Book Header Section */}
-        <section className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
+        <section className="grid grid-cols-1 md:grid-cols-12 gap-6 sm:gap-8 items-start">
           {/* Cover Art */}
           <div className="md:col-span-4 flex justify-center">
-            <div className="relative aspect-[3/4] w-64 max-w-full rounded-2xl overflow-hidden bg-zinc-900 shadow-2xl border border-zinc-800">
+            <div className="relative aspect-[3/4] w-48 sm:w-64 max-w-full rounded-2xl overflow-hidden bg-zinc-900 shadow-2xl border border-zinc-800">
               {book.localCoverPath || book.coverUrl ? (
                 <img
                   src={book.localCoverPath || book.coverUrl || ''}
@@ -167,7 +149,7 @@ function BookDetailContent({ params }: { params: Promise<{ id: string }> }) {
           </div>
 
           {/* Book Info & Action Panel */}
-          <div className="md:col-span-8 space-y-6">
+          <div className="md:col-span-8 space-y-5 sm:space-y-6">
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="outline" className="border-zinc-700 bg-zinc-900 text-zinc-300">
@@ -186,7 +168,7 @@ function BookDetailContent({ params }: { params: Promise<{ id: string }> }) {
                 )}
               </div>
 
-              <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-white leading-tight">
+              <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-white leading-tight">
                 {book.title}
               </h1>
 

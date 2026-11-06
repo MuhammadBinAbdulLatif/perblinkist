@@ -74,14 +74,15 @@ export function GlobalSearchBar({ className }: { className?: string }) {
         <Input
           ref={inputRef}
           type="text"
-          placeholder="Search entire library by title, author, category... (Ctrl+K)"
+          placeholder="Search library…"
           value={query}
           onFocus={() => setIsOpen(true)}
           onChange={(e) => {
             setQuery(e.target.value);
             setIsOpen(true);
           }}
-          className="bg-zinc-900 border-zinc-800 pl-10 pr-9 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-zinc-600 text-xs sm:text-sm h-9 rounded-lg"
+          className="bg-zinc-900 border-zinc-800 pl-10 pr-9 text-zinc-100 placeholder:text-zinc-500 focus-visible:ring-zinc-600 text-xs sm:text-sm h-10 md:h-9 rounded-lg"
+          aria-label="Search library"
         />
 
         {query && (
@@ -100,7 +101,7 @@ export function GlobalSearchBar({ className }: { className?: string }) {
 
       {/* Database Search Results Dropdown Overlay */}
       {isOpen && trimmedQuery.length > 0 && (
-        <div className="absolute top-full left-0 right-0 mt-1.5 bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden z-50 divide-y divide-zinc-850 animate-in fade-in-0 zoom-in-95 duration-100">
+        <div className="absolute top-full left-0 right-0 mt-1.5 bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl overflow-hidden z-50 divide-y divide-zinc-850 animate-in fade-in-0 zoom-in-95 duration-100 max-h-[min(24rem,70vh)] sm:max-h-none">
           <div className="px-3.5 py-2 bg-zinc-900/60 flex items-center justify-between text-[11px] text-zinc-400">
             <span>
               Database matches for &quot;<strong className="text-zinc-200">{trimmedQuery}</strong>&quot;

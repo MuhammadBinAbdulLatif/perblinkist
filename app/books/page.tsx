@@ -1,29 +1,22 @@
 'use client';
 
-import React, { useState, useTransition, Suspense } from 'react';
+import React, { useState, Suspense } from 'react';
 import Link from 'next/link';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import {
-  ArrowLeft,
-  Search,
   BookOpen,
   Play,
-  Clock,
-  Filter,
   ChevronLeft,
   ChevronRight,
-  Sparkles,
 } from 'lucide-react';
 import { trpc } from '@/lib/trpc';
 import { useAudioPlayer } from '@/lib/player-context';
-import { GlobalSearchBar } from '@/components/GlobalSearchBar';
+import { AppHeader } from '@/components/AppHeader';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 
 function BooksCatalogContent() {
-  const router = useRouter();
   const searchParams = useSearchParams();
 
   const initialCategory = searchParams.get('category') || 'All';
@@ -61,45 +54,36 @@ function BooksCatalogContent() {
   };
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col pb-24">
-      {/* Top Bar */}
-      <header className="sticky top-0 z-40 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800 px-6 py-3.5">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-          <Link
-            href="/"
-            className="flex items-center gap-2 text-sm text-zinc-400 hover:text-white transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Dashboard</span>
-          </Link>
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col pb-32 md:pb-24">
+      <AppHeader
+        variant="back"
+        backHref="/"
+        backLabel="Dashboard"
+        trailingLabel={
+          <span className="text-xs text-zinc-400">
+            <span className="font-semibold text-zinc-200">{totalCount}</span> in library
+          </span>
+        }
+      />
 
-          <GlobalSearchBar />
-
-          <div className="flex items-center gap-2 text-xs text-zinc-400">
-            <span className="font-semibold text-zinc-200">{totalCount}</span>
-            <span>Audiobooks in library</span>
-          </div>
-        </div>
-      </header>
-
-      <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-8 space-y-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-5 sm:space-y-6">
         {/* Header Title & Sorting */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800 pb-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 border-b border-zinc-800 pb-4 sm:pb-5">
           <div>
-            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-white">
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight text-white">
               All Audiobooks ({totalCount})
             </h1>
             <p className="text-xs text-zinc-400 mt-1">
-              Browsing page {page} of {totalPages} (30 per page)
+              Page {page} of {totalPages} · 30 per page
             </p>
           </div>
 
           <div className="flex items-center gap-2 text-xs">
-            <span className="text-zinc-500">Sort by:</span>
+            <span className="text-zinc-500 shrink-0">Sort by:</span>
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as any)}
-              className="bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-zinc-200 text-xs focus:outline-none"
+              className="flex-1 sm:flex-none bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-2.5 sm:py-1.5 text-zinc-200 text-xs focus:outline-none min-h-11 sm:min-h-0"
             >
               <option value="recent">Recently Added</option>
               <option value="title">Title (A-Z)</option>
@@ -110,12 +94,12 @@ function BooksCatalogContent() {
         </div>
 
         {/* Category Filter Pills */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-2 scrollbar-none">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-none">
           <Button
             size="sm"
             variant={category === 'All' ? 'default' : 'outline'}
             onClick={() => handleCategorySelect('All')}
-            className={`text-xs rounded-full cursor-pointer h-7 ${
+            className={`text-xs rounded-full cursor-pointer h-9 sm:h-7 shrink-0 touch-manipulation ${
               category === 'All'
                 ? 'bg-white text-zinc-950 font-semibold'
                 : 'border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-white'
@@ -129,7 +113,7 @@ function BooksCatalogContent() {
               size="sm"
               variant={category === cat.name ? 'default' : 'outline'}
               onClick={() => handleCategorySelect(cat.name)}
-              className={`text-xs rounded-full cursor-pointer h-7 whitespace-nowrap ${
+              className={`text-xs rounded-full cursor-pointer h-9 sm:h-7 whitespace-nowrap shrink-0 touch-manipulation ${
                 category === cat.name
                   ? 'bg-white text-zinc-950 font-semibold'
                   : 'border-zinc-800 bg-zinc-900 text-zinc-400 hover:text-white'

@@ -234,9 +234,9 @@ export function AuthScreen({ isInitialized, onSuccess }: AuthScreenProps) {
       </div>
 
       {/* Right Half: Official Shadcn Form Components */}
-      <div className="flex-1 flex flex-col justify-center items-center p-8 sm:p-12 lg:p-16 bg-zinc-950 overflow-y-auto">
-        <div className="w-full max-w-sm space-y-6">
-          <div className="lg:hidden flex items-center gap-2.5 mb-2">
+      <div className="flex-1 flex flex-col justify-center items-center p-5 sm:p-8 lg:p-16 bg-zinc-950 overflow-y-auto safe-area-pad">
+        <div className="w-full max-w-sm space-y-5 sm:space-y-6">
+          <div className="lg:hidden flex items-center gap-2.5 mb-1">
             <Logo size={20} className="text-white" />
             <span className="font-semibold text-base tracking-tight text-white">PerBlinkist</span>
           </div>

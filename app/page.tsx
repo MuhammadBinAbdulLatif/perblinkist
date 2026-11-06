@@ -1,39 +1,27 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import Link from 'next/link';
 import {
   Play,
-  Pause,
   BookOpen,
-  Search,
-  FolderSync,
-  LogOut,
-  User as UserIcon,
-  Bookmark,
   Sparkles,
   Flame,
   Shuffle,
   Clock,
   Library,
   ChevronRight,
-  TrendingUp,
-  RefreshCcw,
 } from 'lucide-react';
 import { trpc } from '@/lib/trpc';
 import { useAudioPlayer } from '@/lib/player-context';
 import { AuthScreen } from '@/components/AuthScreen';
-import { Logo } from '@/components/Logo';
-import { GlobalSearchBar } from '@/components/GlobalSearchBar';
+import { AppHeader } from '@/components/AppHeader';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 
 export default function Home() {
-  const { currentBook, isPlaying, playBook } = useAudioPlayer();
-  const [searchQuery, setSearchQuery] = useState('');
-
+  const { playBook } = useAudioPlayer();
   // Authentication status query
   const authStatusQuery = trpc.auth.status.useQuery();
   const logoutMutation = trpc.auth.logout.useMutation({
@@ -48,11 +36,6 @@ export default function Home() {
   const randomShelfQuery = trpc.getRandomShelf.useQuery({ limit: 10 });
   const quickReadsQuery = trpc.getQuickReadsShelf.useQuery({ limit: 10 });
   const categoriesQuery = trpc.getCategoriesWithCounts.useQuery();
-
-  const searchQueryHook = trpc.searchBooks.useQuery(
-    { query: searchQuery, limit: 18 },
-    { enabled: searchQuery.trim().length > 0 }
-  );
 
   const scanStatusQuery = trpc.getScanStatus.useQuery(undefined, {
     refetchInterval: (data) =>
@@ -92,8 +75,15 @@ export default function Home() {
   const categories = categoriesQuery.data || [];
   const totalBooksCount = scanStats?.totalIndexed || 0;
 
+  const scanStatusLabel =
+    scanStats?.status === 'indexing'
+      ? 'Indexing Files...'
+      : scanStats?.status === 'enriching'
+        ? `Batching (${scanStats.totalEnriched}/${scanStats.totalIndexed})`
+        : 'Sync Library';
+
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col pb-24">
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col pb-32 md:pb-24">
       {/* Auth Screen Modal */}
       {(!currentUser || !isInitialized) && (
         <AuthScreen
@@ -107,137 +97,43 @@ export default function Home() {
         />
       )}
 
-      {/* Top Navigation Bar */}
-      <header className="sticky top-0 z-40 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800 px-6 py-3">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <Logo size={20} className="text-white" />
-            <span className="text-base font-semibold tracking-tight text-white">
-              PerBlinkist
-            </span>
-          </div>
-
-          <div className="flex items-center gap-1">
-            <Link href="/books">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-zinc-300 hover:text-white hover:bg-zinc-900 gap-1.5 text-xs font-medium cursor-pointer"
-              >
-                <Library className="w-3.5 h-3.5" />
-                <span>Browse All Books</span>
-              </Button>
-            </Link>
-
-            <Link href="/listen-later">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-zinc-400 hover:text-white hover:bg-zinc-900 gap-1.5 text-xs cursor-pointer"
-              >
-                <Bookmark className="w-3.5 h-3.5" />
-                <span>Listen Later</span>
-              </Button>
-            </Link>
-          </div>
-
-          <GlobalSearchBar />
-
-          <div className="flex items-center gap-2 text-sm">
-            {isRateLimited && (
-              <Badge variant="outline" className="border-amber-700/50 bg-amber-950/40 text-amber-400 text-xs px-2.5 py-1">
-                Cooldown: {rateLimitRemainingSeconds}s
-              </Badge>
-            )}
-
-            {/* Reset Rate Limit — shown when rate limited or there are stuck books */}
-            {currentUser && (scanStats?.totalRateLimited ?? 0) > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => resetRateLimitMutation.mutate()}
-                disabled={resetRateLimitMutation.isPending}
-                title="Clear rate limit cooldown and retry stuck books"
-                className="border border-amber-800/50 bg-amber-950/30 hover:bg-amber-900/40 text-amber-400 hover:text-amber-300 cursor-pointer text-xs gap-1.5"
-              >
-                <RefreshCcw className={`w-3.5 h-3.5 ${resetRateLimitMutation.isPending ? 'animate-spin' : ''}`} />
-                <span>Reset Cooldown</span>
-              </Button>
-            )}
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => triggerScanMutation.mutate()}
-              disabled={isScanning}
-              className="border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 cursor-pointer text-xs"
-            >
-              <FolderSync className={`w-3.5 h-3.5 mr-1.5 ${isScanning ? 'animate-spin' : ''}`} />
-              <span>
-                {scanStats?.status === 'indexing'
-                  ? 'Indexing Files...'
-                  : scanStats?.status === 'enriching'
-                  ? `Batching (${scanStats.totalEnriched}/${scanStats.totalIndexed})`
-                  : 'Sync Library'}
-              </span>
-            </Button>
-
-            {currentUser && (
-              <div className="flex items-center gap-2 pl-2 border-l border-zinc-800">
-                <Badge variant="secondary" className="bg-zinc-900 border-zinc-800 text-zinc-300 font-medium">
-                  <UserIcon className="w-3 h-3 mr-1 text-zinc-400" />
-                  <span>{currentUser.username}</span>
-                </Badge>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => logoutMutation.mutate()}
-                  title="Sign Out"
-                  className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-900 cursor-pointer"
-                >
-                  <LogOut className="w-3.5 h-3.5" />
-                </Button>
-              </div>
-            )}
-          </div>
-        </div>
-      </header>
+      <AppHeader
+        variant="home"
+        username={currentUser?.username}
+        onLogout={currentUser ? () => logoutMutation.mutate() : undefined}
+        scan={
+          currentUser
+            ? {
+                isScanning,
+                isRateLimited,
+                rateLimitRemainingSeconds,
+                statusLabel: scanStatusLabel,
+                showResetCooldown: (scanStats?.totalRateLimited ?? 0) > 0,
+                onSync: () => triggerScanMutation.mutate(),
+                onResetCooldown: () => resetRateLimitMutation.mutate(),
+                syncPending: triggerScanMutation.isPending,
+                resetPending: resetRateLimitMutation.isPending,
+              }
+            : undefined
+        }
+      />
 
       {/* Main Content & Right-Column Categories Layout */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-8">
-        {/* If Search is Active */}
-        {searchQuery.trim().length > 0 ? (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-              <h2 className="text-xl font-bold text-white">
-                Search Results for &quot;{searchQuery}&quot;
-              </h2>
-              <span className="text-xs text-zinc-400">
-                {searchQueryHook.data?.length || 0} books found
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              {searchQueryHook.data?.map((book) => (
-                <BookShelfCard key={book.id} book={book} onPlay={() => playBook(book)} />
-              ))}
-            </div>
-          </div>
-        ) : (
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
             {/* Left 9 Columns: Spotlight & Curated Shelves */}
-            <div className="lg:col-span-9 space-y-12">
+            <div className="lg:col-span-9 space-y-10 sm:space-y-12">
               {/* Spotlight Pick of the Day */}
               {spotlightBook && (
-                <Card className="relative overflow-hidden rounded-2xl bg-zinc-900 border-zinc-800 p-8 md:p-10 text-zinc-100 shadow-2xl">
-                  <div className="relative z-10 max-w-2xl space-y-4">
+                <Card className="relative overflow-hidden rounded-2xl bg-zinc-900 border-zinc-800 p-5 sm:p-8 md:p-10 text-zinc-100 shadow-2xl">
+                  <div className="relative z-10 max-w-2xl space-y-3 sm:space-y-4">
                     <Badge variant="outline" className="border-zinc-700 bg-zinc-800/80 text-zinc-300 text-[10px] tracking-wider uppercase font-medium">
                       Featured Pick of the Day
                     </Badge>
-                    <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-white leading-tight">
+                    <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight text-white leading-tight">
                       {spotlightBook.title}
                     </h1>
-                    <p className="text-base text-zinc-400">
+                    <p className="text-sm sm:text-base text-zinc-400">
                       by <span className="text-zinc-200 font-medium">{spotlightBook.author || 'Unknown'}</span>
                     </p>
                     <p className="text-sm text-zinc-300/90 line-clamp-3 leading-relaxed">
@@ -245,10 +141,10 @@ export default function Home() {
                         'Key audio takeaways and insights summarized for rapid learning. Start listening immediately.'}
                     </p>
 
-                    <div className="flex flex-wrap items-center gap-3 pt-3">
+                    <div className="flex flex-wrap items-center gap-2 sm:gap-3 pt-2 sm:pt-3">
                       <Button
                         onClick={() => playBook(spotlightBook)}
-                        className="bg-white text-zinc-950 hover:bg-zinc-200 font-semibold px-5 rounded-xl cursor-pointer gap-2"
+                        className="bg-white text-zinc-950 hover:bg-zinc-200 font-semibold px-5 h-11 sm:h-10 rounded-xl cursor-pointer gap-2 touch-manipulation"
                       >
                         <Play className="w-4 h-4 fill-current ml-0.5" />
                         <span>Play Summary</span>
@@ -257,13 +153,13 @@ export default function Home() {
                       <Link href={`/book/${spotlightBook.id}`}>
                         <Button
                           variant="outline"
-                          className="border-zinc-700 bg-zinc-950/60 text-zinc-200 hover:bg-zinc-800 rounded-xl cursor-pointer"
+                          className="border-zinc-700 bg-zinc-950/60 text-zinc-200 hover:bg-zinc-800 rounded-xl cursor-pointer h-11 sm:h-10"
                         >
                           View Details
                         </Button>
                       </Link>
 
-                      <Link href="/books">
+                      <Link href="/books" className="hidden sm:inline-flex">
                         <Button
                           variant="ghost"
                           className="text-zinc-400 hover:text-white text-xs gap-1"
@@ -291,15 +187,15 @@ export default function Home() {
               {/* Shelf 1: Continue Listening (up to 10 in-progress books) */}
               {continueListeningQuery.data && continueListeningQuery.data.length > 0 && (
                 <section className="space-y-4">
-                  <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2.5">
-                    <div className="flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-emerald-400" />
-                      <h2 className="text-lg font-bold text-white tracking-tight">Continue Listening</h2>
+                  <div className="flex items-center justify-between gap-2 border-b border-zinc-800/80 pb-2.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Clock className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <h2 className="text-base sm:text-lg font-bold text-white tracking-tight truncate">Continue Listening</h2>
                     </div>
-                    <span className="text-xs text-zinc-500">Pick up where you left off</span>
+                    <span className="hidden sm:inline text-xs text-zinc-500 shrink-0">Pick up where you left off</span>
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4">
                     {continueListeningQuery.data.map((book) => {
                       const totalSec = book.durationSeconds || 900;
                       const progressPct = Math.min(100, Math.round((book.playbackPosition / totalSec) * 100));
@@ -365,21 +261,21 @@ export default function Home() {
 
               {/* Shelf 2: Trending Worldwide (Cross-referenced with Google Books API) */}
               <section className="space-y-4">
-                <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2.5">
-                  <div className="flex items-center gap-2">
-                    <Flame className="w-4 h-4 text-amber-400" />
-                    <h2 className="text-lg font-bold text-white tracking-tight">Trending in Your Collection</h2>
-                    <Badge variant="outline" className="border-amber-700/40 bg-amber-950/30 text-amber-400 text-[10px] ml-1">
+                <div className="flex items-center justify-between gap-2 border-b border-zinc-800/80 pb-2.5">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Flame className="w-4 h-4 text-amber-400 shrink-0" />
+                    <h2 className="text-base sm:text-lg font-bold text-white tracking-tight truncate">Trending in Your Collection</h2>
+                    <Badge variant="outline" className="hidden sm:inline-flex border-amber-700/40 bg-amber-950/30 text-amber-400 text-[10px] ml-1 shrink-0">
                       Bestsellers matched
                     </Badge>
                   </div>
-                  <Link href="/books?sortBy=recent" className="text-xs text-zinc-400 hover:text-white flex items-center gap-1">
-                    <span>View all</span>
+                  <Link href="/books?sortBy=recent" className="text-xs text-zinc-400 hover:text-white flex items-center gap-1 shrink-0">
+                    <span className="hidden sm:inline">View all</span>
                     <ChevronRight className="w-3 h-3" />
                   </Link>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4">
                   {trendingShelfQuery.data?.slice(0, 10).map((book) => (
                     <BookShelfCard key={book.id} book={book} onPlay={() => playBook(book)} />
                   ))}
@@ -388,23 +284,23 @@ export default function Home() {
 
               {/* Shelf 3: Discover Something New (Randomized 10 Books with Re-shuffle) */}
               <section className="space-y-4">
-                <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2.5">
-                  <div className="flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-purple-400" />
-                    <h2 className="text-lg font-bold text-white tracking-tight">Discover Something New</h2>
+                <div className="flex items-center justify-between gap-2 border-b border-zinc-800/80 pb-2.5">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Sparkles className="w-4 h-4 text-purple-400 shrink-0" />
+                    <h2 className="text-base sm:text-lg font-bold text-white tracking-tight truncate">Discover Something New</h2>
                   </div>
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => randomShelfQuery.refetch()}
-                    className="text-xs text-zinc-400 hover:text-white gap-1 h-7 px-2 cursor-pointer"
+                    className="text-xs text-zinc-400 hover:text-white gap-1 h-9 sm:h-7 px-2 cursor-pointer shrink-0 touch-manipulation"
                   >
                     <Shuffle className="w-3 h-3" />
                     <span>Shuffle</span>
                   </Button>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4">
                   {randomShelfQuery.data?.slice(0, 10).map((book) => (
                     <BookShelfCard key={book.id} book={book} onPlay={() => playBook(book)} />
                   ))}
@@ -414,15 +310,15 @@ export default function Home() {
               {/* Shelf 4: Quick 15-Minute Listens */}
               {quickReadsQuery.data && quickReadsQuery.data.length > 0 && (
                 <section className="space-y-4">
-                  <div className="flex items-center justify-between border-b border-zinc-800/80 pb-2.5">
-                    <div className="flex items-center gap-2">
-                      <Clock className="w-4 h-4 text-blue-400" />
-                      <h2 className="text-lg font-bold text-white tracking-tight">Quick Listens (Under 20 Mins)</h2>
+                  <div className="flex items-center justify-between gap-2 border-b border-zinc-800/80 pb-2.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Clock className="w-4 h-4 text-blue-400 shrink-0" />
+                      <h2 className="text-base sm:text-lg font-bold text-white tracking-tight truncate">Quick Listens</h2>
                     </div>
-                    <span className="text-xs text-zinc-500">Perfect for commutes &amp; breaks</span>
+                    <span className="hidden sm:inline text-xs text-zinc-500 shrink-0">Under 20 mins</span>
                   </div>
 
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4">
                     {quickReadsQuery.data.slice(0, 10).map((book) => (
                       <BookShelfCard key={book.id} book={book} onPlay={() => playBook(book)} />
                     ))}
@@ -431,9 +327,8 @@ export default function Home() {
               )}
             </div>
 
-            {/* Right 3 Columns: Audiobook-Bay-style Genre Taxonomy & Stats Sidebar */}
-            <aside className="lg:col-span-3 space-y-6 lg:border-l lg:border-zinc-800 lg:pl-6">
-              {/* Library Statistics Card */}
+            {/* Genre sidebar — stacks under shelves on mobile */}
+            <aside className="lg:col-span-3 space-y-6 lg:border-l lg:border-zinc-800 lg:pl-6 order-last">
               <Card className="bg-zinc-900 border-zinc-800 p-4 rounded-xl space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-zinc-400 font-medium uppercase tracking-wider">Your Library</span>
@@ -444,14 +339,36 @@ export default function Home() {
                   <span className="text-xs text-zinc-400">total audiobooks</span>
                 </div>
                 <Link href="/books">
-                  <Button className="w-full bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-semibold h-8 rounded-lg mt-1 cursor-pointer">
+                  <Button className="w-full bg-white hover:bg-zinc-200 text-zinc-950 text-xs font-semibold h-11 sm:h-8 rounded-lg mt-1 cursor-pointer touch-manipulation">
                     Browse All {totalBooksCount} Books
                   </Button>
                 </Link>
               </Card>
 
-              {/* Categories & Genres List (Audiobook Bay inspired) */}
-              <div className="space-y-3">
+              {/* Mobile: horizontal genre chips */}
+              <div className="lg:hidden space-y-2">
+                <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-wider px-0.5">Browse by Genre</h3>
+                <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 scrollbar-none">
+                  <Link
+                    href="/books"
+                    className="shrink-0 rounded-full border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs text-zinc-300"
+                  >
+                    All ({totalBooksCount})
+                  </Link>
+                  {categories.map((cat) => (
+                    <Link
+                      key={cat.name}
+                      href={`/books?category=${encodeURIComponent(cat.name)}`}
+                      className="shrink-0 rounded-full border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-400 whitespace-nowrap"
+                    >
+                      {cat.name} ({cat.count})
+                    </Link>
+                  ))}
+                </div>
+              </div>
+
+              {/* Desktop: vertical genre list */}
+              <div className="hidden lg:block space-y-3">
                 <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
                   <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-wider">Browse by Genre</h3>
                   <span className="text-[10px] text-zinc-500">{categories.length} Genres</span>
@@ -484,7 +401,6 @@ export default function Home() {
               </div>
             </aside>
           </div>
-        )}
       </main>
     </div>
   );

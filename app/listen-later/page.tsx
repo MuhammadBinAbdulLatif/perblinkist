@@ -3,17 +3,15 @@
 import React from 'react';
 import Link from 'next/link';
 import {
-  ArrowLeft,
   Bookmark,
   Play,
   Pause,
   Trash2,
-  Clock,
   BookOpen,
 } from 'lucide-react';
 import { trpc } from '@/lib/trpc';
 import { useAudioPlayer } from '@/lib/player-context';
-import { GlobalSearchBar } from '@/components/GlobalSearchBar';
+import { AppHeader } from '@/components/AppHeader';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -30,33 +28,24 @@ export default function ListenLaterPage() {
   const books = listenLaterQuery.data || [];
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col pb-24">
-      {/* Header */}
-      <header className="sticky top-0 z-40 bg-zinc-950/90 backdrop-blur-md border-b border-zinc-800 px-6 py-3.5">
-        <div className="max-w-6xl mx-auto flex items-center justify-between gap-4">
-          <Link
-            href="/"
-            className="flex items-center gap-2 text-sm text-zinc-400 hover:text-white transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Back to Dashboard</span>
-          </Link>
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col pb-32 md:pb-24">
+      <AppHeader
+        variant="back"
+        backHref="/"
+        backLabel="Dashboard"
+        trailingLabel={
+          <span className="flex items-center gap-1.5 text-sm font-semibold text-zinc-200">
+            <Bookmark className="w-3.5 h-3.5 text-zinc-400" />
+            Listen Later
+          </span>
+        }
+      />
 
-          <GlobalSearchBar className="max-w-md hidden sm:block" />
-
-          <div className="flex items-center gap-2">
-            <Bookmark className="w-4 h-4 text-zinc-400" />
-            <span className="text-sm font-semibold text-zinc-200">Listen Later</span>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="flex-1 max-w-5xl w-full mx-auto px-6 py-10 space-y-8">
+      <main className="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-10 space-y-6 sm:space-y-8">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-white">Your Saved Summaries</h1>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">Your Saved Summaries</h1>
           <p className="text-sm text-zinc-400 mt-1">
-            Audiobooks and summaries queued for your upcoming listening sessions.
+            Queued for your next listening sessions.
           </p>
         </div>
 
