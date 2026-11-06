@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
   Play,
@@ -12,7 +12,11 @@ import {
   Library,
   ChevronRight,
   Loader2,
+  WifiOff,
+  DownloadCloud,
+  ArrowRight,
 } from 'lucide-react';
+import { getAllOfflineBooks, OfflineBookRecord } from '@/lib/offline-storage';
 import { Logo } from '@/components/Logo';
 import { trpc } from '@/lib/trpc';
 import { useAudioPlayer } from '@/lib/player-context';
@@ -24,6 +28,67 @@ import { Badge } from '@/components/ui/badge';
 
 export default function Home() {
   const { playBook } = useAudioPlayer();
+  const [isOnline, setIsOnline] = useState(true);
+  const [offlineCount, setOfflineCount] = useState(0);
+  const [sessionTimedOut, setSessionTimedOut] = useState(false);
+  const [serverProbeFailed, setServerProbeFailed] = useState(false);
+
+  // Active heartbeat probe to detect if the local backend server is down
+  // (navigator.onLine stays true if Wi-Fi/LAN is connected even when the local server process terminated)
+  useEffect(() => {
+    let isMounted = true;
+    const probe = async () => {
+      try {
+        const controller = new AbortController();
+        const probeTimer = setTimeout(() => controller.abort(), 1500);
+        const res = await fetch('/api/trpc/auth.status?batch=1&input=%7B%7D', {
+          signal: controller.signal,
+          cache: 'no-cache',
+        });
+        clearTimeout(probeTimer);
+        if (!res.ok && res.status >= 500) {
+          if (isMounted) setServerProbeFailed(true);
+        }
+      } catch {
+        if (isMounted) setServerProbeFailed(true);
+      }
+    };
+
+    probe();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Hard safety timeout: If session verification takes more than 1.5s, treat as offline
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSessionTimedOut(true);
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Monitor online status & offline cached books
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setIsOnline(navigator.onLine);
+      const handleOnline = () => setIsOnline(true);
+      const handleOffline = () => setIsOnline(false);
+
+      window.addEventListener('online', handleOnline);
+      window.addEventListener('offline', handleOffline);
+
+      getAllOfflineBooks().then((res) => {
+        setOfflineCount(res.books.length);
+      });
+
+      return () => {
+        window.removeEventListener('online', handleOnline);
+        window.removeEventListener('offline', handleOffline);
+      };
+    }
+  }, []);
+
   // Authentication status query
   const authStatusQuery = trpc.auth.status.useQuery();
   const logoutMutation = trpc.auth.logout.useMutation({
@@ -84,8 +149,100 @@ export default function Home() {
         ? `Batching (${scanStats.totalEnriched}/${scanStats.totalIndexed})`
         : 'Sync Library';
 
-  // Prevent flash of login modal or content while validating user session
-  if (authStatusQuery.isLoading) {
+  const isServerOffline =
+    !isOnline ||
+    serverProbeFailed ||
+    authStatusQuery.isError ||
+    trendingShelfQuery.isError ||
+    (sessionTimedOut && authStatusQuery.isLoading);
+
+  // If server is unreachable or user is offline, show dedicated Offline Mode screen
+  if (isServerOffline) {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col pb-32 md:pb-24">
+        <AppHeader
+          variant="home"
+          showSearch={false}
+          trailingLabel={
+            <Badge variant="outline" className="border-amber-700/60 bg-amber-950/40 text-amber-400 text-xs px-2.5 py-1 flex items-center gap-1.5">
+              <WifiOff className="w-3.5 h-3.5" />
+              <span>Offline Mode</span>
+            </Badge>
+          }
+        />
+
+        <main className="flex-1 max-w-2xl w-full mx-auto px-4 sm:px-6 py-12 sm:py-20 flex flex-col items-center justify-center text-center">
+          <Card className="w-full bg-zinc-900/70 border-zinc-800 p-8 sm:p-12 rounded-3xl shadow-2xl flex flex-col items-center space-y-6">
+            <div className="relative">
+              <div className="w-20 h-20 rounded-3xl bg-amber-950/40 border border-amber-800/60 flex items-center justify-center text-amber-400 shadow-xl">
+                <WifiOff className="w-10 h-10" />
+              </div>
+              <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-zinc-950 border border-zinc-800 flex items-center justify-center">
+                <DownloadCloud className="w-4 h-4 text-emerald-400" />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Badge variant="outline" className="border-amber-800/50 bg-amber-950/30 text-amber-400 text-[11px] font-semibold uppercase tracking-wider">
+                Connection Unavailable
+              </Badge>
+              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
+                You&apos;re currently offline
+              </h1>
+              <p className="text-xs sm:text-sm text-zinc-400 max-w-md leading-relaxed mx-auto">
+                The PerBlinkist server cannot be reached right now. You can still listen to all your downloaded audiobook summaries without an internet connection.
+              </p>
+            </div>
+
+            {offlineCount > 0 ? (
+              <div className="w-full pt-2 space-y-3">
+                <div className="p-3.5 rounded-xl bg-zinc-950/80 border border-zinc-850 flex items-center justify-between text-xs text-zinc-300">
+                  <span className="flex items-center gap-2">
+                    <DownloadCloud className="w-4 h-4 text-emerald-400" />
+                    <span>Saved Audiobooks</span>
+                  </span>
+                  <span className="font-bold text-white bg-zinc-800 px-2 py-0.5 rounded-md">
+                    {offlineCount} available
+                  </span>
+                </div>
+
+                <Link href="/downloads" className="block w-full">
+                  <Button className="w-full bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold h-12 rounded-xl text-sm gap-2 cursor-pointer shadow-lg shadow-emerald-950/50">
+                    <DownloadCloud className="w-4 h-4 fill-current" />
+                    <span>Go to Downloaded Books</span>
+                    <ArrowRight className="w-4 h-4 ml-1" />
+                  </Button>
+                </Link>
+              </div>
+            ) : (
+              <div className="w-full pt-2 space-y-3">
+                <p className="text-xs text-zinc-500">
+                  No summaries were downloaded offline before disconnecting.
+                </p>
+                <Link href="/downloads" className="block w-full">
+                  <Button variant="outline" className="w-full border-zinc-800 bg-zinc-900 text-zinc-200 hover:text-white h-11 rounded-xl text-xs gap-2 cursor-pointer">
+                    <span>View Downloads Shelf</span>
+                  </Button>
+                </Link>
+              </div>
+            )}
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => window.location.reload()}
+              className="text-xs text-zinc-500 hover:text-zinc-300 gap-1.5 h-8"
+            >
+              <span>Retry connection</span>
+            </Button>
+          </Card>
+        </main>
+      </div>
+    );
+  }
+
+  // Prevent flash of login modal or content while validating user session (only when online)
+  if (authStatusQuery.isLoading && isOnline) {
     return (
       <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center">
         <div className="flex flex-col items-center gap-4 animate-in fade-in duration-300">

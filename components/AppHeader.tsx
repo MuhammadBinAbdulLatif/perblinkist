@@ -14,6 +14,7 @@ import {
   ArrowLeft,
   Users,
   History,
+  DownloadCloud,
 } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import { GlobalSearchBar } from '@/components/GlobalSearchBar';
@@ -140,6 +141,16 @@ export function AppHeader({
                   <span>Listen Later</span>
                 </Button>
               </Link>
+              <Link href="/downloads">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-zinc-400 hover:text-white hover:bg-zinc-900 gap-1.5 text-xs cursor-pointer"
+                >
+                  <DownloadCloud className="w-3.5 h-3.5" />
+                  <span>Downloads</span>
+                </Button>
+              </Link>
             </nav>
           )}
 
@@ -233,6 +244,13 @@ export function AppHeader({
                 icon={<Bookmark className="w-4 h-4" />}
               >
                 Listen Later
+              </DrawerLink>
+              <DrawerLink
+                href="/downloads"
+                onClick={closeMenu}
+                icon={<DownloadCloud className="w-4 h-4" />}
+              >
+                Offline Downloads
               </DrawerLink>
               {variant === 'back' && (
                 <DrawerLink href={backHref} onClick={closeMenu} icon={<ArrowLeft className="w-4 h-4" />}>

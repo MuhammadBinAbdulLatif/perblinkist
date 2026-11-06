@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useRef, useEffect } from 'react';
 import { trpc } from '@/lib/trpc';
+import { getOfflineAudioUrl } from '@/lib/offline-storage';
 
 export interface PlayingBook {
   id: string;
@@ -58,12 +59,25 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
     setIsPlaying(true);
 
     if (audioRef.current) {
-      audioRef.current.src = `/api/stream/${book.id}`;
-      audioRef.current.playbackRate = playbackRate;
       const initialPos = book.playbackPosition || 0;
+      audioRef.current.playbackRate = playbackRate;
       audioRef.current.currentTime = initialPos;
       setCurrentTime(initialPos);
-      audioRef.current.play().catch(console.error);
+
+      // Check if book has an offline cached audio Blob
+      getOfflineAudioUrl(book.id)
+        .then((offlineUrl) => {
+          if (audioRef.current) {
+            audioRef.current.src = offlineUrl || `/api/stream/${book.id}`;
+            audioRef.current.play().catch(console.error);
+          }
+        })
+        .catch(() => {
+          if (audioRef.current) {
+            audioRef.current.src = `/api/stream/${book.id}`;
+            audioRef.current.play().catch(console.error);
+          }
+        });
     }
   };
 
@@ -97,10 +111,12 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
     const clamped = Math.max(0, Math.min(duration || 0, newTime));
     audioRef.current.currentTime = clamped;
     setCurrentTime(clamped);
-    updateProgressMutation.mutate({
-      id: currentBook.id,
-      playbackPosition: clamped,
-    });
+    if (typeof navigator === 'undefined' || navigator.onLine) {
+      updateProgressMutation.mutate({
+        id: currentBook.id,
+        playbackPosition: clamped,
+      });
+    }
   };
 
   const skip = (deltaSeconds: number) => {
@@ -108,10 +124,12 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
     const clamped = Math.max(0, Math.min(duration || 0, audioRef.current.currentTime + deltaSeconds));
     audioRef.current.currentTime = clamped;
     setCurrentTime(clamped);
-    updateProgressMutation.mutate({
-      id: currentBook.id,
-      playbackPosition: clamped,
-    });
+    if (typeof navigator === 'undefined' || navigator.onLine) {
+      updateProgressMutation.mutate({
+        id: currentBook.id,
+        playbackPosition: clamped,
+      });
+    }
   };
 
   const changePlaybackRate = (rate: number) => {
@@ -127,11 +145,11 @@ export function AudioPlayerProvider({ children }: { children: React.ReactNode })
     changePlaybackRate(nextRate);
   };
 
-  // Sync progress every 10 seconds while playing
+  // Sync progress every 10 seconds while playing (only when online)
   useEffect(() => {
     if (!isPlaying || !currentBook) return;
     const interval = setInterval(() => {
-      if (audioRef.current) {
+      if (audioRef.current && (typeof navigator === 'undefined' || navigator.onLine)) {
         updateProgressMutation.mutate({
           id: currentBook.id,
           playbackPosition: audioRef.current.currentTime,

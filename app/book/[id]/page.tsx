@@ -26,6 +26,7 @@ import { AppHeader } from '@/components/AppHeader';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
+import { OfflineDownloadButton } from '@/components/OfflineDownloadButton';
 
 function BookDetailContent({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = use(params);
@@ -209,14 +210,16 @@ function BookDetailContent({ params }: { params: Promise<{ id: string }> }) {
                 )}
               </Button>
 
-              <a href={`/api/download/${book.id}`} download>
+              <OfflineDownloadButton book={book} />
+
+              <a href={`/api/download/${book.id}`} download title="Download raw audio file to device disk">
                 <Button
                   variant="outline"
                   size="lg"
                   className="border-zinc-800 bg-zinc-900 hover:bg-zinc-800 text-zinc-200 rounded-xl cursor-pointer gap-2"
                 >
                   <Download className="w-4 h-4 text-zinc-400" />
-                  <span>Download Audio</span>
+                  <span>File Export</span>
                 </Button>
               </a>
             </div>
