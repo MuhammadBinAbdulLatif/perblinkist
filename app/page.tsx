@@ -31,40 +31,12 @@ export default function Home() {
   const [isOnline, setIsOnline] = useState(true);
   const [offlineCount, setOfflineCount] = useState(0);
   const [sessionTimedOut, setSessionTimedOut] = useState(false);
-  const [serverProbeFailed, setServerProbeFailed] = useState(false);
 
-  // Active heartbeat probe to detect if the local backend server is down
-  // (navigator.onLine stays true if Wi-Fi/LAN is connected even when the local server process terminated)
-  useEffect(() => {
-    let isMounted = true;
-    const probe = async () => {
-      try {
-        const controller = new AbortController();
-        const probeTimer = setTimeout(() => controller.abort(), 1500);
-        const res = await fetch('/api/trpc/auth.status?batch=1&input=%7B%7D', {
-          signal: controller.signal,
-          cache: 'no-cache',
-        });
-        clearTimeout(probeTimer);
-        if (!res.ok && res.status >= 500) {
-          if (isMounted) setServerProbeFailed(true);
-        }
-      } catch {
-        if (isMounted) setServerProbeFailed(true);
-      }
-    };
-
-    probe();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  // Hard safety timeout: If session verification takes more than 1.5s, treat as offline
+  // Hard safety timeout: If session verification takes more than 3.5s, treat as offline
   useEffect(() => {
     const timer = setTimeout(() => {
       setSessionTimedOut(true);
-    }, 1500);
+    }, 3500);
     return () => clearTimeout(timer);
   }, []);
 
@@ -151,10 +123,29 @@ export default function Home() {
 
   const isServerOffline =
     !isOnline ||
-    serverProbeFailed ||
     authStatusQuery.isError ||
-    trendingShelfQuery.isError ||
     (sessionTimedOut && authStatusQuery.isLoading);
+
+  // Prevent flash of login modal or content while validating user session (only when online)
+  if (authStatusQuery.isLoading && !sessionTimedOut && isOnline && !authStatusQuery.isError) {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center">
+        <div className="flex flex-col items-center gap-4 animate-in fade-in duration-300">
+          <div className="relative">
+            <div className="w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center shadow-2xl">
+              <Logo size={28} className="text-zinc-300 animate-pulse" />
+            </div>
+            <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-zinc-950 border border-zinc-800 flex items-center justify-center">
+              <Loader2 className="w-3 h-3 text-emerald-400 animate-spin" />
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-xs font-medium text-zinc-400">
+            <span>Verifying session...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // If server is unreachable or user is offline, show dedicated Offline Mode screen
   if (isServerOffline) {
@@ -237,27 +228,6 @@ export default function Home() {
             </Button>
           </Card>
         </main>
-      </div>
-    );
-  }
-
-  // Prevent flash of login modal or content while validating user session (only when online)
-  if (authStatusQuery.isLoading && isOnline) {
-    return (
-      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center">
-        <div className="flex flex-col items-center gap-4 animate-in fade-in duration-300">
-          <div className="relative">
-            <div className="w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center shadow-2xl">
-              <Logo size={28} className="text-zinc-300 animate-pulse" />
-            </div>
-            <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-zinc-950 border border-zinc-800 flex items-center justify-center">
-              <Loader2 className="w-3 h-3 text-emerald-400 animate-spin" />
-            </div>
-          </div>
-          <div className="flex items-center gap-2 text-xs font-medium text-zinc-400">
-            <span>Verifying session...</span>
-          </div>
-        </div>
       </div>
     );
   }

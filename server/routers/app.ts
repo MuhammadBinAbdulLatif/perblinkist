@@ -456,17 +456,21 @@ export const appRouter = router({
       });
     }),
 
-  // Authors Exploration Procedures
+  // Authors Exploration Procedures with Pagination
   getAuthorsWithCounts: publicProcedure
     .input(
       z.object({
         search: z.string().optional(),
         sortBy: z.enum(['count', 'name']).default('count'),
+        page: z.number().min(1).default(1),
+        pageSize: z.number().min(1).max(100).default(24),
       }).optional()
     )
     .query(async ({ input }) => {
       const search = input?.search?.trim();
       const sortBy = input?.sortBy || 'count';
+      const page = input?.page || 1;
+      const pageSize = input?.pageSize || 24;
 
       // Aggregate all non-missing books grouped by author
       const books = await prisma.bookSummary.findMany({
@@ -547,9 +551,17 @@ export const appRouter = router({
         authors.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
       }
 
+      const totalAuthors = authors.length;
+      const totalPages = Math.ceil(totalAuthors / pageSize);
+      const startIndex = (page - 1) * pageSize;
+      const paginatedAuthors = authors.slice(startIndex, startIndex + pageSize);
+
       return {
-        authors,
-        totalAuthors: authors.length,
+        authors: paginatedAuthors,
+        totalAuthors,
+        totalPages,
+        currentPage: page,
+        pageSize,
         totalBooks: authors.reduce((acc, a) => acc + a.count, 0),
       };
     }),

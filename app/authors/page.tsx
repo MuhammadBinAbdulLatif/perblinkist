@@ -9,6 +9,7 @@ import {
   ArrowRight,
   Sparkles,
   Clock,
+  ChevronLeft,
   ChevronRight,
   TrendingUp,
 } from 'lucide-react';
@@ -22,15 +23,30 @@ import { Button } from '@/components/ui/button';
 export default function AuthorsPage() {
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<'count' | 'name'>('count');
+  const [page, setPage] = useState<number>(1);
+  const pageSize = 24;
 
   const authorsQuery = trpc.getAuthorsWithCounts.useQuery({
     search: search.trim() || undefined,
     sortBy,
+    page,
+    pageSize,
   });
 
   const authors = authorsQuery.data?.authors || [];
   const totalAuthors = authorsQuery.data?.totalAuthors || 0;
+  const totalPages = authorsQuery.data?.totalPages || 1;
   const totalBooks = authorsQuery.data?.totalBooks || 0;
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearch(e.target.value);
+    setPage(1);
+  };
+
+  const handleSortChange = (newSort: 'count' | 'name') => {
+    setSortBy(newSort);
+    setPage(1);
+  };
 
   const formatHours = (secs: number) => {
     const hours = Math.round((secs / 3600) * 10) / 10;
@@ -73,13 +89,13 @@ export default function AuthorsPage() {
                 type="text"
                 placeholder="Search author..."
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={handleSearchChange}
                 className="bg-zinc-900 border-zinc-800 pl-8 text-xs text-zinc-200 placeholder:text-zinc-500 rounded-lg h-9"
               />
             </div>
             <select
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as any)}
+              onChange={(e) => handleSortChange(e.target.value as any)}
               className="bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-2 text-zinc-200 text-xs focus:outline-none h-9"
             >
               <option value="count">Most Summaries</option>
@@ -195,6 +211,46 @@ export default function AuthorsPage() {
                 </Link>
               );
             })}
+          </div>
+        )}
+
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2 pt-8 border-t border-zinc-850">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page <= 1}
+              onClick={() => {
+                setPage((p) => Math.max(1, p - 1));
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className="border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 text-xs gap-1 cursor-pointer"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+              <span>Previous</span>
+            </Button>
+
+            <div className="flex items-center gap-1 text-xs px-2 text-zinc-400">
+              <span>Page</span>
+              <span className="font-semibold text-white">{page}</span>
+              <span>of</span>
+              <span className="font-semibold text-white">{totalPages}</span>
+            </div>
+
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page >= totalPages}
+              onClick={() => {
+                setPage((p) => Math.min(totalPages, p + 1));
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              className="border-zinc-800 bg-zinc-900 text-zinc-300 hover:bg-zinc-800 text-xs gap-1 cursor-pointer"
+            >
+              <span>Next</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </Button>
           </div>
         )}
       </main>

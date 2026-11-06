@@ -1,5 +1,5 @@
 // PerBlinkist Offline Service Worker
-const CACHE_NAME = 'perblinkist-app-v6';
+const CACHE_NAME = 'perblinkist-app-v7';
 
 // Core routes and assets needed so the browser can boot, load CSS/icons,
 // and directly access /downloads even when the backend/server is completely down.
@@ -64,7 +64,7 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch event: Network-first with aggressive offline fallbacks
+// Fetch event: Stale-While-Revalidate / Cache-First for assets, Network-First for HTML/APIs
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
@@ -114,47 +114,54 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Next.js static production chunks, static bundles, and assets: Cache-first
+  // Next.js static production chunks, static bundles, fonts, icons and assets:
+  // Persistent Cache-first with background revalidation.
+  // This guarantees offline boot after hard refresh or hours/days of closure.
   if (
-    url.pathname.startsWith('/_next/static/') ||
+    url.pathname.startsWith('/_next/') ||
     url.pathname.startsWith('/api/covers') ||
     url.pathname.endsWith('.svg') ||
     url.pathname.endsWith('.png') ||
     url.pathname.endsWith('.jpg') ||
+    url.pathname.endsWith('.jpeg') ||
+    url.pathname.endsWith('.webp') ||
     url.pathname.endsWith('.ico') ||
     url.pathname.endsWith('.css') ||
-    url.pathname.endsWith('.js')
+    url.pathname.endsWith('.js') ||
+    url.pathname.endsWith('.woff2') ||
+    url.pathname.endsWith('.woff') ||
+    url.pathname.endsWith('.ttf')
   ) {
     event.respondWith(
-      caches.open(CACHE_NAME).then((cache) => {
-        return cache.match(event.request).then((cachedResponse) => {
-          if (cachedResponse) {
-            // Update cache in background
-            fetch(event.request)
-              .then((netRes) => {
-                if (netRes && netRes.status === 200) {
-                  cache.put(event.request, netRes);
-                }
-              })
-              .catch(() => {});
-            return cachedResponse;
-          }
-
-          return fetch(event.request)
-            .then((networkResponse) => {
-              if (networkResponse && networkResponse.status === 200) {
-                cache.put(event.request, networkResponse.clone());
+      caches.open(CACHE_NAME).then(async (cache) => {
+        const cachedResponse = await cache.match(event.request);
+        if (cachedResponse) {
+          // If online, update cache in background
+          fetch(event.request)
+            .then((netRes) => {
+              if (netRes && netRes.status === 200) {
+                cache.put(event.request, netRes);
               }
-              return networkResponse;
             })
-            .catch(() => cachedResponse);
-        });
+            .catch(() => {});
+          return cachedResponse;
+        }
+
+        try {
+          const networkResponse = await fetch(event.request);
+          if (networkResponse && networkResponse.status === 200) {
+            cache.put(event.request, networkResponse.clone());
+          }
+          return networkResponse;
+        } catch {
+          return cachedResponse || new Response('', { status: 404 });
+        }
       })
     );
     return;
   }
 
-  // HTML page navigations: Network-first with fast 1.5s timeout fallback
+  // HTML page navigations: Network-first with fast 1.5s timeout fallback to cached page shell
   if (event.request.mode === 'navigate') {
     event.respondWith(
       fetchWithTimeout(event.request, 1500)
@@ -180,7 +187,7 @@ self.addEventListener('fetch', (event) => {
           const exactMatch = await cache.match(event.request);
           if (exactMatch) return exactMatch;
 
-          // Otherwise, fall back to home or downloads
+          // Otherwise, fall back to cached home shell or downloads shell
           const homeMatch = await cache.match('/');
           if (homeMatch) return homeMatch;
 
