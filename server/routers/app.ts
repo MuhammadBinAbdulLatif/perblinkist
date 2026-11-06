@@ -455,6 +455,251 @@ export const appRouter = router({
         },
       });
     }),
+
+  // Authors Exploration Procedures
+  getAuthorsWithCounts: publicProcedure
+    .input(
+      z.object({
+        search: z.string().optional(),
+        sortBy: z.enum(['count', 'name']).default('count'),
+      }).optional()
+    )
+    .query(async ({ input }) => {
+      const search = input?.search?.trim();
+      const sortBy = input?.sortBy || 'count';
+
+      // Aggregate all non-missing books grouped by author
+      const books = await prisma.bookSummary.findMany({
+        where: {
+          isMissing: false,
+          author: { not: null },
+        },
+        select: {
+          id: true,
+          title: true,
+          author: true,
+          coverUrl: true,
+          localCoverPath: true,
+          durationSeconds: true,
+          category: true,
+        },
+      });
+
+      // Group books by cleaned author name
+      const authorMap = new Map<
+        string,
+        {
+          name: string;
+          count: number;
+          totalDurationSeconds: number;
+          sampleBooks: Array<{
+            id: string;
+            title: string;
+            coverUrl: string | null;
+            localCoverPath: string | null;
+          }>;
+        }
+      >();
+
+      for (const b of books) {
+        const rawAuthor = b.author?.trim();
+        if (!rawAuthor || rawAuthor.toLowerCase() === 'unknown') continue;
+
+        const existing = authorMap.get(rawAuthor);
+        if (existing) {
+          existing.count += 1;
+          existing.totalDurationSeconds += b.durationSeconds || 0;
+          if (existing.sampleBooks.length < 3) {
+            existing.sampleBooks.push({
+              id: b.id,
+              title: b.title,
+              coverUrl: b.coverUrl,
+              localCoverPath: b.localCoverPath,
+            });
+          }
+        } else {
+          authorMap.set(rawAuthor, {
+            name: rawAuthor,
+            count: 1,
+            totalDurationSeconds: b.durationSeconds || 0,
+            sampleBooks: [
+              {
+                id: b.id,
+                title: b.title,
+                coverUrl: b.coverUrl,
+                localCoverPath: b.localCoverPath,
+              },
+            ],
+          });
+        }
+      }
+
+      let authors = Array.from(authorMap.values());
+
+      if (search) {
+        const lowerSearch = search.toLowerCase();
+        authors = authors.filter((a) => a.name.toLowerCase().includes(lowerSearch));
+      }
+
+      if (sortBy === 'name') {
+        authors.sort((a, b) => a.name.localeCompare(b.name));
+      } else {
+        authors.sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+      }
+
+      return {
+        authors,
+        totalAuthors: authors.length,
+        totalBooks: authors.reduce((acc, a) => acc + a.count, 0),
+      };
+    }),
+
+  getAuthorDetails: publicProcedure
+    .input(z.object({ name: z.string().min(1) }))
+    .query(async ({ input, ctx }) => {
+      const authorName = decodeURIComponent(input.name).trim();
+
+      const books = await prisma.bookSummary.findMany({
+        where: {
+          isMissing: false,
+          author: { equals: authorName },
+        },
+        orderBy: [{ publishedYear: 'desc' }, { title: 'asc' }],
+      });
+
+      // Calculate total duration & genres
+      const totalDurationSeconds = books.reduce((acc, b) => acc + (b.durationSeconds || 0), 0);
+      const categories = Array.from(
+        new Set(books.map((b) => b.category).filter(Boolean) as string[])
+      );
+
+      // Check saved status if logged in
+      let savedBookIds = new Set<string>();
+      if (ctx.user) {
+        const saved = await prisma.listenLater.findMany({
+          where: {
+            userId: ctx.user.userId,
+            bookId: { in: books.map((b) => b.id) },
+          },
+          select: { bookId: true },
+        });
+        savedBookIds = new Set(saved.map((s) => s.bookId));
+      }
+
+      const booksWithSaved = books.map((b) => ({
+        ...b,
+        isSaved: savedBookIds.has(b.id),
+      }));
+
+      return {
+        name: authorName,
+        booksCount: books.length,
+        totalDurationSeconds,
+        categories,
+        books: booksWithSaved,
+      };
+    }),
+
+  // Listening History Procedures
+  getListeningHistory: publicProcedure
+    .input(
+      z.object({
+        filter: z.enum(['all', 'in_progress', 'completed']).default('all'),
+      }).optional()
+    )
+    .query(async ({ input }) => {
+      const filter = input?.filter || 'all';
+
+      const whereClause: any = {
+        isMissing: false,
+        OR: [
+          { playbackPosition: { gt: 0 } },
+          { isCompleted: true },
+          { lastPlayedAt: { not: null } },
+        ],
+      };
+
+      if (filter === 'in_progress') {
+        whereClause.isCompleted = false;
+        whereClause.playbackPosition = { gt: 0 };
+      } else if (filter === 'completed') {
+        whereClause.isCompleted = true;
+      }
+
+      const books = await prisma.bookSummary.findMany({
+        where: whereClause,
+        orderBy: [{ lastPlayedAt: 'desc' }, { updatedAt: 'desc' }],
+      });
+
+      const totalListened = await prisma.bookSummary.count({
+        where: {
+          isMissing: false,
+          OR: [
+            { playbackPosition: { gt: 0 } },
+            { isCompleted: true },
+            { lastPlayedAt: { not: null } },
+          ],
+        },
+      });
+
+      const completedCount = await prisma.bookSummary.count({
+        where: {
+          isMissing: false,
+          isCompleted: true,
+        },
+      });
+
+      const inProgressCount = await prisma.bookSummary.count({
+        where: {
+          isMissing: false,
+          isCompleted: false,
+          playbackPosition: { gt: 0 },
+        },
+      });
+
+      return {
+        books,
+        stats: {
+          totalListened,
+          completedCount,
+          inProgressCount,
+        },
+      };
+    }),
+
+  clearListeningHistory: publicProcedure
+    .input(
+      z.object({
+        bookId: z.string().optional(),
+        clearAll: z.boolean().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      if (input.bookId) {
+        await prisma.bookSummary.update({
+          where: { id: input.bookId },
+          data: {
+            playbackPosition: 0,
+            isCompleted: false,
+            lastPlayedAt: null,
+          },
+        });
+        return { success: true };
+      }
+
+      if (input.clearAll) {
+        await prisma.bookSummary.updateMany({
+          data: {
+            playbackPosition: 0,
+            isCompleted: false,
+            lastPlayedAt: null,
+          },
+        });
+        return { success: true };
+      }
+
+      return { success: false };
+    }),
 });
 
 export type AppRouter = typeof appRouter;

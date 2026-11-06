@@ -418,7 +418,17 @@ function BookDetailContent({ params }: { params: Promise<{ id: string }> }) {
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-4">
-            {recommendationsQuery.data && recommendationsQuery.data.length > 0 ? (
+            {recommendationsQuery.isLoading ? (
+              Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="space-y-2 animate-pulse">
+                  <div className="aspect-[3/4] rounded-xl bg-zinc-900 border border-zinc-800" />
+                  <div className="space-y-1">
+                    <div className="h-3 w-4/5 bg-zinc-800 rounded" />
+                    <div className="h-2.5 w-1/2 bg-zinc-850 rounded" />
+                  </div>
+                </div>
+              ))
+            ) : recommendationsQuery.data && recommendationsQuery.data.length > 0 ? (
               recommendationsQuery.data.map((rec) => (
                 <Link key={rec.id} href={`/book/${rec.id}`} className="group block">
                   <div className="space-y-2">

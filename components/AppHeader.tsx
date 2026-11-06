@@ -12,6 +12,8 @@ import {
   User as UserIcon,
   X,
   ArrowLeft,
+  Users,
+  History,
 } from 'lucide-react';
 import { Logo } from '@/components/Logo';
 import { GlobalSearchBar } from '@/components/GlobalSearchBar';
@@ -105,7 +107,27 @@ export function AppHeader({
                   className="text-zinc-300 hover:text-white hover:bg-zinc-900 gap-1.5 text-xs font-medium cursor-pointer"
                 >
                   <Library className="w-3.5 h-3.5" />
-                  <span>Browse All Books</span>
+                  <span>Browse Books</span>
+                </Button>
+              </Link>
+              <Link href="/authors">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-zinc-300 hover:text-white hover:bg-zinc-900 gap-1.5 text-xs font-medium cursor-pointer"
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  <span>Authors</span>
+                </Button>
+              </Link>
+              <Link href="/history">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-zinc-400 hover:text-white hover:bg-zinc-900 gap-1.5 text-xs cursor-pointer"
+                >
+                  <History className="w-3.5 h-3.5" />
+                  <span>History</span>
                 </Button>
               </Link>
               <Link href="/listen-later">
@@ -198,6 +220,12 @@ export function AppHeader({
             <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
               <DrawerLink href="/books" onClick={closeMenu} icon={<Library className="w-4 h-4" />}>
                 Browse All Books
+              </DrawerLink>
+              <DrawerLink href="/authors" onClick={closeMenu} icon={<Users className="w-4 h-4" />}>
+                Browse Authors
+              </DrawerLink>
+              <DrawerLink href="/history" onClick={closeMenu} icon={<History className="w-4 h-4" />}>
+                Listening History
               </DrawerLink>
               <DrawerLink
                 href="/listen-later"

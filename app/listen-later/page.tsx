@@ -50,8 +50,26 @@ export default function ListenLaterPage() {
         </div>
 
         {listenLaterQuery.isLoading ? (
-          <div className="py-20 flex justify-center text-zinc-500">
-            <div className="w-6 h-6 border-2 border-zinc-600 border-t-white rounded-full animate-spin" />
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Card
+                key={i}
+                className="rounded-xl bg-zinc-900/60 border-zinc-800/80 p-3 flex flex-col justify-between animate-pulse"
+              >
+                <div className="space-y-2">
+                  <div className="aspect-[3/4] w-full rounded-lg bg-zinc-800/60" />
+                  <div className="space-y-1.5 pt-1">
+                    <div className="h-2.5 w-14 bg-zinc-800/80 rounded" />
+                    <div className="h-3 w-4/5 bg-zinc-800 rounded" />
+                    <div className="h-2.5 w-1/2 bg-zinc-800/60 rounded" />
+                  </div>
+                </div>
+                <div className="mt-3 pt-2 border-t border-zinc-800/40 flex items-center justify-between">
+                  <div className="h-2.5 w-8 bg-zinc-800/60 rounded" />
+                  <div className="h-6 w-6 rounded-md bg-zinc-800/80" />
+                </div>
+              </Card>
+            ))}
           </div>
         ) : books.length === 0 ? (
           <Card className="bg-zinc-900/50 border-zinc-800 p-12 text-center rounded-2xl flex flex-col items-center gap-4">

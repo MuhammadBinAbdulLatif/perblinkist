@@ -8,6 +8,7 @@ import {
   Play,
   ChevronLeft,
   ChevronRight,
+  Loader2,
 } from 'lucide-react';
 import { trpc } from '@/lib/trpc';
 import { useAudioPlayer } from '@/lib/player-context';
@@ -127,8 +128,26 @@ function BooksCatalogContent() {
 
         {/* 30 Books Grid */}
         {paginatedQuery.isLoading ? (
-          <div className="py-24 flex items-center justify-center">
-            <div className="w-6 h-6 border-2 border-zinc-600 border-t-white rounded-full animate-spin" />
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-6 gap-4">
+            {Array.from({ length: 12 }).map((_, i) => (
+              <Card
+                key={i}
+                className="rounded-xl bg-zinc-900/60 border-zinc-800/80 p-3 flex flex-col justify-between animate-pulse"
+              >
+                <div className="space-y-2">
+                  <div className="aspect-[3/4] w-full rounded-lg bg-zinc-800/60" />
+                  <div className="space-y-1.5 pt-1">
+                    <div className="h-2.5 w-14 bg-zinc-800/80 rounded" />
+                    <div className="h-3 w-4/5 bg-zinc-800 rounded" />
+                    <div className="h-2.5 w-1/2 bg-zinc-800/60 rounded" />
+                  </div>
+                </div>
+                <div className="mt-3 pt-2 border-t border-zinc-800/40 flex items-center justify-between">
+                  <div className="h-2.5 w-8 bg-zinc-800/60 rounded" />
+                  <div className="h-6 w-6 rounded-md bg-zinc-800/80" />
+                </div>
+              </Card>
+            ))}
           </div>
         ) : books.length === 0 ? (
           <div className="py-20 text-center space-y-3">
@@ -245,8 +264,9 @@ export default function BooksCatalogPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center">
-          <div className="w-6 h-6 border-2 border-zinc-600 border-t-white rounded-full animate-spin" />
+        <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center gap-3">
+          <div className="w-6 h-6 border-2 border-zinc-700 border-t-white rounded-full animate-spin" />
+          <span className="text-xs text-zinc-500 font-medium">Loading library catalog...</span>
         </div>
       }
     >

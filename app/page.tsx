@@ -11,7 +11,9 @@ import {
   Clock,
   Library,
   ChevronRight,
+  Loader2,
 } from 'lucide-react';
+import { Logo } from '@/components/Logo';
 import { trpc } from '@/lib/trpc';
 import { useAudioPlayer } from '@/lib/player-context';
 import { AuthScreen } from '@/components/AuthScreen';
@@ -82,6 +84,27 @@ export default function Home() {
         ? `Batching (${scanStats.totalEnriched}/${scanStats.totalIndexed})`
         : 'Sync Library';
 
+  // Prevent flash of login modal or content while validating user session
+  if (authStatusQuery.isLoading) {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center">
+        <div className="flex flex-col items-center gap-4 animate-in fade-in duration-300">
+          <div className="relative">
+            <div className="w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center shadow-2xl">
+              <Logo size={28} className="text-zinc-300 animate-pulse" />
+            </div>
+            <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-zinc-950 border border-zinc-800 flex items-center justify-center">
+              <Loader2 className="w-3 h-3 text-emerald-400 animate-spin" />
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-xs font-medium text-zinc-400">
+            <span>Verifying session...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col pb-32 md:pb-24">
       {/* Auth Screen Modal */}
@@ -124,7 +147,9 @@ export default function Home() {
             {/* Left 9 Columns: Spotlight & Curated Shelves */}
             <div className="lg:col-span-9 space-y-10 sm:space-y-12">
               {/* Spotlight Pick of the Day */}
-              {spotlightBook && (
+              {trendingShelfQuery.isLoading && randomShelfQuery.isLoading ? (
+                <SpotlightSkeleton />
+              ) : spotlightBook ? (
                 <Card className="relative overflow-hidden rounded-2xl bg-zinc-900 border-zinc-800 p-5 sm:p-8 md:p-10 text-zinc-100 shadow-2xl">
                   <div className="relative z-10 max-w-2xl space-y-3 sm:space-y-4">
                     <Badge variant="outline" className="border-zinc-700 bg-zinc-800/80 text-zinc-300 text-[10px] tracking-wider uppercase font-medium">
@@ -182,7 +207,7 @@ export default function Home() {
                     </div>
                   ) : null}
                 </Card>
-              )}
+              ) : null}
 
               {/* Shelf 1: Continue Listening (up to 10 in-progress books) */}
               {continueListeningQuery.data && continueListeningQuery.data.length > 0 && (
@@ -275,11 +300,15 @@ export default function Home() {
                   </Link>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4">
-                  {trendingShelfQuery.data?.slice(0, 10).map((book) => (
-                    <BookShelfCard key={book.id} book={book} onPlay={() => playBook(book)} />
-                  ))}
-                </div>
+                {trendingShelfQuery.isLoading ? (
+                  <ShelfSkeleton />
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4">
+                    {trendingShelfQuery.data?.slice(0, 10).map((book) => (
+                      <BookShelfCard key={book.id} book={book} onPlay={() => playBook(book)} />
+                    ))}
+                  </div>
+                )}
               </section>
 
               {/* Shelf 3: Discover Something New (Randomized 10 Books with Re-shuffle) */}
@@ -300,15 +329,30 @@ export default function Home() {
                   </Button>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4">
-                  {randomShelfQuery.data?.slice(0, 10).map((book) => (
-                    <BookShelfCard key={book.id} book={book} onPlay={() => playBook(book)} />
-                  ))}
-                </div>
+                {randomShelfQuery.isLoading ? (
+                  <ShelfSkeleton />
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4">
+                    {randomShelfQuery.data?.slice(0, 10).map((book) => (
+                      <BookShelfCard key={book.id} book={book} onPlay={() => playBook(book)} />
+                    ))}
+                  </div>
+                )}
               </section>
 
               {/* Shelf 4: Quick 15-Minute Listens */}
-              {quickReadsQuery.data && quickReadsQuery.data.length > 0 && (
+              {quickReadsQuery.isLoading ? (
+                <section className="space-y-4">
+                  <div className="flex items-center justify-between gap-2 border-b border-zinc-800/80 pb-2.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Clock className="w-4 h-4 text-blue-400 shrink-0" />
+                      <h2 className="text-base sm:text-lg font-bold text-white tracking-tight truncate">Quick Listens</h2>
+                    </div>
+                    <span className="hidden sm:inline text-xs text-zinc-500 shrink-0">Under 20 mins</span>
+                  </div>
+                  <ShelfSkeleton />
+                </section>
+              ) : quickReadsQuery.data && quickReadsQuery.data.length > 0 ? (
                 <section className="space-y-4">
                   <div className="flex items-center justify-between gap-2 border-b border-zinc-800/80 pb-2.5">
                     <div className="flex items-center gap-2 min-w-0">
@@ -324,7 +368,7 @@ export default function Home() {
                     ))}
                   </div>
                 </section>
-              )}
+              ) : null}
             </div>
 
             {/* Genre sidebar — stacks under shelves on mobile */}
@@ -348,61 +392,125 @@ export default function Home() {
               {/* Mobile: horizontal genre chips */}
               <div className="lg:hidden space-y-2">
                 <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-wider px-0.5">Browse by Genre</h3>
-                <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 scrollbar-none">
-                  <Link
-                    href="/books"
-                    className="shrink-0 rounded-full border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs text-zinc-300"
-                  >
-                    All ({totalBooksCount})
-                  </Link>
-                  {categories.map((cat) => (
+                {categoriesQuery.isLoading ? (
+                  <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 scrollbar-none">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <div key={i} className="h-8 w-20 rounded-full bg-zinc-900 border border-zinc-800 animate-pulse shrink-0" />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex gap-2 overflow-x-auto pb-1 -mx-4 px-4 scrollbar-none">
                     <Link
-                      key={cat.name}
-                      href={`/books?category=${encodeURIComponent(cat.name)}`}
-                      className="shrink-0 rounded-full border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-400 whitespace-nowrap"
+                      href="/books"
+                      className="shrink-0 rounded-full border border-zinc-800 bg-zinc-900 px-3 py-2 text-xs text-zinc-300"
                     >
-                      {cat.name} ({cat.count})
+                      All ({totalBooksCount})
                     </Link>
-                  ))}
-                </div>
+                    {categories.map((cat) => (
+                      <Link
+                        key={cat.name}
+                        href={`/books?category=${encodeURIComponent(cat.name)}`}
+                        className="shrink-0 rounded-full border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-400 whitespace-nowrap"
+                      >
+                        {cat.name} ({cat.count})
+                      </Link>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Desktop: vertical genre list */}
               <div className="hidden lg:block space-y-3">
                 <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
                   <h3 className="text-xs font-bold text-zinc-300 uppercase tracking-wider">Browse by Genre</h3>
-                  <span className="text-[10px] text-zinc-500">{categories.length} Genres</span>
+                  <span className="text-[10px] text-zinc-500">
+                    {categoriesQuery.isLoading ? '...' : `${categories.length} Genres`}
+                  </span>
                 </div>
 
-                <div className="space-y-1 max-h-[600px] overflow-y-auto pr-1">
-                  <Link
-                    href="/books"
-                    className="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs text-zinc-300 hover:bg-zinc-900 hover:text-white transition group"
-                  >
-                    <span className="font-medium group-hover:underline">All Audiobooks</span>
-                    <Badge variant="secondary" className="bg-zinc-900 text-zinc-400 text-[10px] border border-zinc-800">
-                      {totalBooksCount}
-                    </Badge>
-                  </Link>
-
-                  {categories.map((cat) => (
+                {categoriesQuery.isLoading ? (
+                  <div className="space-y-2 py-1">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <div key={i} className="h-7 w-full rounded-lg bg-zinc-900/60 border border-zinc-800/40 animate-pulse" />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-1 max-h-[600px] overflow-y-auto pr-1">
                     <Link
-                      key={cat.name}
-                      href={`/books?category=${encodeURIComponent(cat.name)}`}
-                      className="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100 transition group"
+                      href="/books"
+                      className="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs text-zinc-300 hover:bg-zinc-900 hover:text-white transition group"
                     >
-                      <span className="truncate pr-2 group-hover:underline">{cat.name}</span>
-                      <Badge variant="outline" className="text-[10px] text-zinc-500 border-zinc-800 bg-zinc-950 font-mono">
-                        {cat.count}
+                      <span className="font-medium group-hover:underline">All Audiobooks</span>
+                      <Badge variant="secondary" className="bg-zinc-900 text-zinc-400 text-[10px] border border-zinc-800">
+                        {totalBooksCount}
                       </Badge>
                     </Link>
-                  ))}
-                </div>
+
+                    {categories.map((cat) => (
+                      <Link
+                        key={cat.name}
+                        href={`/books?category=${encodeURIComponent(cat.name)}`}
+                        className="flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100 transition group"
+                      >
+                        <span className="truncate pr-2 group-hover:underline">{cat.name}</span>
+                        <Badge variant="outline" className="text-[10px] text-zinc-500 border-zinc-800 bg-zinc-950 font-mono">
+                          {cat.count}
+                        </Badge>
+                      </Link>
+                    ))}
+                  </div>
+                )}
               </div>
             </aside>
           </div>
       </main>
     </div>
+  );
+}
+
+function ShelfSkeleton() {
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 sm:gap-4">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <Card
+          key={i}
+          className="rounded-xl bg-zinc-900/60 border-zinc-800/80 p-3 flex flex-col justify-between animate-pulse"
+        >
+          <div className="space-y-2">
+            <div className="aspect-[3/4] w-full rounded-lg bg-zinc-800/60" />
+            <div className="space-y-1.5 pt-1">
+              <div className="h-2.5 w-14 bg-zinc-800/80 rounded" />
+              <div className="h-3 w-4/5 bg-zinc-800 rounded" />
+              <div className="h-2.5 w-1/2 bg-zinc-800/60 rounded" />
+            </div>
+          </div>
+          <div className="mt-3 pt-2 border-t border-zinc-800/40 flex items-center justify-between">
+            <div className="h-2.5 w-8 bg-zinc-800/60 rounded" />
+            <div className="h-6 w-6 rounded-md bg-zinc-800/80" />
+          </div>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+function SpotlightSkeleton() {
+  return (
+    <Card className="rounded-2xl bg-zinc-900 border-zinc-800 p-5 sm:p-8 md:p-10 animate-pulse">
+      <div className="max-w-2xl space-y-3 sm:space-y-4">
+        <div className="h-4 w-32 bg-zinc-800 rounded" />
+        <div className="h-8 sm:h-10 w-3/4 bg-zinc-800 rounded" />
+        <div className="h-4 w-1/3 bg-zinc-800/70 rounded" />
+        <div className="space-y-2 pt-2">
+          <div className="h-3.5 w-full bg-zinc-800/60 rounded" />
+          <div className="h-3.5 w-5/6 bg-zinc-800/60 rounded" />
+        </div>
+        <div className="flex items-center gap-3 pt-3">
+          <div className="h-10 w-36 bg-zinc-800 rounded-xl" />
+          <div className="h-10 w-28 bg-zinc-800/60 rounded-xl" />
+        </div>
+      </div>
+    </Card>
   );
 }
 
